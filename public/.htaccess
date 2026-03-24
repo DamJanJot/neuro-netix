@@ -1,0 +1,13 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /neuronetix/
+
+    # Redirect root to index.php
+    RewriteRule ^/?$ public/index.php [L]
+
+    # Cache busting for assets
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(?!public/)(.*)$ public/$1 [L]
+
+</IfModule>
