@@ -62,7 +62,7 @@ function neuronetix_get_pdo(): ?PDO
 function neuronetix_require_login(): void
 {
     if (!isset($_SESSION['loggedin']) || $_SESSION['loggedin'] !== true || !isset($_SESSION['id'])) {
-        header('Location: /login.php');
+        header('Location: /public/login.php');
         exit();
     }
 }
@@ -75,7 +75,7 @@ function neuronetix_require_access(): void
     neuronetix_require_login();
 
     $role = strtolower(trim((string) ($_SESSION['rola'] ?? 'user')));
-    if (!in_array($role, ['admin', 'owner'], true)) {
+    if (!in_array($role, ['admin', 'owner', 'uczen', 'nauczyciel'], true)) {
         header('Location: /');
         exit();
     }
