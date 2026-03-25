@@ -301,6 +301,151 @@ function neuronetix_app_switcher_items(): array
     return $items;
 }
 
+function neuronetix_safe_identifier(string $value): ?string
+{
+    return preg_match('/^[a-zA-Z0-9_]+$/', $value) === 1 ? $value : null;
+}
+
+function neuronetix_first_existing_table(array $tableCandidates): ?string
+{
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO) {
+        return null;
+    }
+
+    foreach ($tableCandidates as $tableName) {
+        $table = neuronetix_safe_identifier((string) $tableName);
+        if ($table === null) {
+            continue;
+        }
+        if (neuronetix_table_exists($pdo, $table)) {
+            return $table;
+        }
+    }
+
+    return null;
+}
+
+function neuronetix_table_columns(string $tableName): array
+{
+    $pdo = neuronetix_get_pdo();
+    $table = neuronetix_safe_identifier($tableName);
+    if (!$pdo instanceof PDO || $table === null) {
+        return [];
+    }
+
+    try {
+        $stmt = $pdo->query('SHOW COLUMNS FROM `' . $table . '`');
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $columns = [];
+        foreach ($rows as $row) {
+            $field = strtolower(trim((string) ($row['Field'] ?? '')));
+            if ($field !== '') {
+                $columns[] = $field;
+            }
+        }
+
+        return $columns;
+    } catch (Throwable $e) {
+        return [];
+    }
+}
+
+function neuronetix_count_rows(array $tableCandidates): ?int
+{
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO) {
+        return null;
+    }
+
+    $table = neuronetix_first_existing_table($tableCandidates);
+    if ($table === null) {
+        return null;
+    }
+
+    try {
+        $stmt = $pdo->query('SELECT COUNT(*) AS cnt FROM `' . $table . '`');
+        $value = (int) $stmt->fetchColumn();
+        return $value;
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+function neuronetix_preview_rows(array $tableCandidates, array $titleCandidates, int $limit = 5): array
+{
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO) {
+        return [];
+    }
+
+    $table = neuronetix_first_existing_table($tableCandidates);
+    if ($table === null) {
+        return [];
+    }
+
+    $columns = neuronetix_table_columns($table);
+    if (empty($columns)) {
+        return [];
+    }
+
+    $titleColumn = null;
+    foreach ($titleCandidates as $candidate) {
+        $name = strtolower(trim((string) $candidate));
+        if (in_array($name, $columns, true)) {
+            $titleColumn = $name;
+            break;
+        }
+    }
+    if ($titleColumn === null) {
+        foreach (['title', 'name', 'nazwa', 'subject', 'quiz_title', 'test_title', 'task_title'] as $candidate) {
+            if (in_array($candidate, $columns, true)) {
+                $titleColumn = $candidate;
+                break;
+            }
+        }
+    }
+    if ($titleColumn === null) {
+        return [];
+    }
+
+    $orderColumn = null;
+    foreach (['created_at', 'updated_at', 'id'] as $candidate) {
+        if (in_array($candidate, $columns, true)) {
+            $orderColumn = $candidate;
+            break;
+        }
+    }
+    if ($orderColumn === null) {
+        $orderColumn = $titleColumn;
+    }
+
+    $safeTitle = neuronetix_safe_identifier($titleColumn);
+    $safeOrder = neuronetix_safe_identifier($orderColumn);
+    $safeTable = neuronetix_safe_identifier($table);
+    if ($safeTitle === null || $safeOrder === null || $safeTable === null) {
+        return [];
+    }
+
+    $limit = max(1, min(20, $limit));
+
+    try {
+        $sql = 'SELECT `' . $safeTitle . '` AS label FROM `' . $safeTable . '` ORDER BY `' . $safeOrder . '` DESC LIMIT ' . $limit;
+        $rows = $pdo->query($sql)->fetchAll(PDO::FETCH_COLUMN);
+        $result = [];
+        foreach ($rows as $row) {
+            $label = trim((string) $row);
+            if ($label !== '') {
+                $result[] = $label;
+            }
+        }
+
+        return $result;
+    } catch (Throwable $e) {
+        return [];
+    }
+}
+
 /**
  * Sanitize input
  */

@@ -54,11 +54,9 @@ a {
     width: 38px;
     height: 38px;
     border-radius: 10px;
-    background: linear-gradient(135deg, var(--accent-2), var(--accent));
-    color: #042332;
-    font-weight: 800;
-    display: grid;
-    place-items: center;
+    object-fit: cover;
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    box-shadow: 0 0 0 2px rgba(8, 17, 35, 0.7);
 }
 
 .nx-brand-name {
@@ -205,6 +203,10 @@ a {
     position: relative;
 }
 
+.nx-switch-side {
+    width: 100%;
+}
+
 .nx-switch-btn,
 .nx-logout,
 .nx-card-cta {
@@ -220,6 +222,41 @@ a {
     padding: 8px 12px;
     cursor: pointer;
     font-size: 13px;
+}
+
+.nx-switch-side .nx-switch-btn {
+    width: 100%;
+    justify-content: flex-start;
+    border-radius: 12px;
+    min-height: 50px;
+    background: rgba(9, 20, 40, 0.95);
+}
+
+.nx-switch-logo {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid rgba(56, 189, 248, 0.45);
+}
+
+.nx-switch-text {
+    display: grid;
+    line-height: 1.1;
+}
+
+.nx-switch-text strong {
+    font-size: 15px;
+}
+
+.nx-switch-text small {
+    font-size: 11px;
+    color: var(--muted);
+}
+
+.nx-switch-arrow {
+    margin-left: auto;
+    color: var(--muted);
 }
 
 .nx-switch-btn:hover,
@@ -241,6 +278,12 @@ a {
     padding: 7px;
     z-index: 40;
     box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
+}
+
+.nx-switch-side .nx-switch-menu {
+    left: 0;
+    right: auto;
+    width: 100%;
 }
 
 .nx-switch.open .nx-switch-menu {
