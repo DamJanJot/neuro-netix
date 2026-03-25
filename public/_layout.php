@@ -62,7 +62,6 @@ foreach ($navItems as $item) {
                 <img class="nx-switch-logo" src="assets/img/neuronetix-logo.png" alt="">
                 <span class="nx-switch-text">
                     <strong>Neuronetix</strong>
-                    <small>Panel edukacyjny</small>
                 </span>
                 <span class="nx-switch-arrow">▾</span>
             </button>
@@ -108,10 +107,6 @@ foreach ($navItems as $item) {
     <main class="nx-main">
         <header class="nx-topbar">
             <button class="nx-mobile-open" id="nxOpenSidebar" aria-label="Otworz menu">☰</button>
-            <div>
-                <h1><?php echo neuronetix_sanitize($pageHeading); ?></h1>
-                <p><?php echo neuronetix_sanitize($pageDescription); ?></p>
-            </div>
             <div class="nx-top-actions">
                 <a class="nx-logout" href="logout.php">Wyloguj</a>
             </div>
