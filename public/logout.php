@@ -8,5 +8,5 @@ require_once __DIR__ . '/../core/bootstrap.php';
 session_destroy();
 
 // Redirect to login
-header('Location: /login.php');
+header('Location: /public/login.php');
 exit();
