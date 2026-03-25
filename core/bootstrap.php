@@ -446,6 +446,279 @@ function neuronetix_preview_rows(array $tableCandidates, array $titleCandidates,
     }
 }
 
+function neuronetix_paginated_rows(array $tableCandidates, array $titleCandidates, string $search = '', int $page = 1, int $perPage = 10): array
+{
+    $pdo = neuronetix_get_pdo();
+    $table = neuronetix_first_existing_table($tableCandidates);
+    if (!$pdo instanceof PDO || $table === null) {
+        return [
+            'table' => null,
+            'rows' => [],
+            'total' => 0,
+            'page' => 1,
+            'pages' => 1,
+            'per_page' => $perPage,
+            'search' => $search,
+        ];
+    }
+
+    $columns = neuronetix_table_columns($table);
+    if (empty($columns)) {
+        return [
+            'table' => $table,
+            'rows' => [],
+            'total' => 0,
+            'page' => 1,
+            'pages' => 1,
+            'per_page' => $perPage,
+            'search' => $search,
+        ];
+    }
+
+    $titleColumn = null;
+    foreach ($titleCandidates as $candidate) {
+        $candidateKey = strtolower(trim((string) $candidate));
+        if (in_array($candidateKey, $columns, true)) {
+            $titleColumn = $candidateKey;
+            break;
+        }
+    }
+    if ($titleColumn === null) {
+        return [
+            'table' => $table,
+            'rows' => [],
+            'total' => 0,
+            'page' => 1,
+            'pages' => 1,
+            'per_page' => $perPage,
+            'search' => $search,
+        ];
+    }
+
+    $idColumn = in_array('id', $columns, true) ? 'id' : $titleColumn;
+    $orderColumn = in_array('created_at', $columns, true) ? 'created_at' : (in_array('id', $columns, true) ? 'id' : $titleColumn);
+
+    $safeTable = neuronetix_safe_identifier($table);
+    $safeTitle = neuronetix_safe_identifier($titleColumn);
+    $safeId = neuronetix_safe_identifier($idColumn);
+    $safeOrder = neuronetix_safe_identifier($orderColumn);
+    if ($safeTable === null || $safeTitle === null || $safeId === null || $safeOrder === null) {
+        return [
+            'table' => null,
+            'rows' => [],
+            'total' => 0,
+            'page' => 1,
+            'pages' => 1,
+            'per_page' => $perPage,
+            'search' => $search,
+        ];
+    }
+
+    $page = max(1, $page);
+    $perPage = max(1, min(50, $perPage));
+    $whereSql = '';
+    $params = [];
+    if ($search !== '') {
+        $whereSql = ' WHERE `' . $safeTitle . '` LIKE ? ';
+        $params[] = '%' . $search . '%';
+    }
+
+    try {
+        $countStmt = $pdo->prepare('SELECT COUNT(*) FROM `' . $safeTable . '`' . $whereSql);
+        $countStmt->execute($params);
+        $total = (int) $countStmt->fetchColumn();
+        $pages = max(1, (int) ceil($total / $perPage));
+        $page = min($page, $pages);
+        $offset = ($page - 1) * $perPage;
+
+        $sql = 'SELECT `' . $safeId . '` AS row_id, `' . $safeTitle . '` AS row_label FROM `' . $safeTable . '`' . $whereSql . ' ORDER BY `' . $safeOrder . '` DESC LIMIT ' . $perPage . ' OFFSET ' . $offset;
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        return [
+            'table' => $table,
+            'rows' => $rows,
+            'total' => $total,
+            'page' => $page,
+            'pages' => $pages,
+            'per_page' => $perPage,
+            'search' => $search,
+        ];
+    } catch (Throwable $e) {
+        return [
+            'table' => $table,
+            'rows' => [],
+            'total' => 0,
+            'page' => 1,
+            'pages' => 1,
+            'per_page' => $perPage,
+            'search' => $search,
+        ];
+    }
+}
+
+function neuronetix_import_csv_to_module(string $module, array $titles): array
+{
+    $moduleMap = [
+        'quizzes' => [
+            'tables' => ['neuronetix_quizzes'],
+            'title_columns' => ['title', 'name', 'quiz_title'],
+        ],
+        'tests' => [
+            'tables' => ['neuronetix_tests', 'neuronetix_student_tests'],
+            'title_columns' => ['title', 'name', 'test_title'],
+        ],
+        'tasks' => [
+            'tables' => ['neuronetix_teacher_tasks', 'neuronetix_tasks'],
+            'title_columns' => ['title', 'name', 'task_title'],
+        ],
+        'subjects' => [
+            'tables' => ['neuronetix_subjects'],
+            'title_columns' => ['name', 'title', 'nazwa'],
+        ],
+    ];
+
+    if (!isset($moduleMap[$module])) {
+        return ['ok' => false, 'message' => 'Nieznany modul importu.', 'inserted' => 0, 'skipped' => count($titles)];
+    }
+
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO) {
+        return ['ok' => false, 'message' => 'Brak polaczenia z baza.', 'inserted' => 0, 'skipped' => count($titles)];
+    }
+
+    $table = neuronetix_first_existing_table((array) $moduleMap[$module]['tables']);
+    if ($table === null) {
+        return ['ok' => false, 'message' => 'Brak tabeli docelowej dla modułu.', 'inserted' => 0, 'skipped' => count($titles)];
+    }
+
+    $columns = neuronetix_table_columns($table);
+    $titleColumn = null;
+    foreach ((array) $moduleMap[$module]['title_columns'] as $candidate) {
+        $candidateKey = strtolower(trim((string) $candidate));
+        if (in_array($candidateKey, $columns, true)) {
+            $titleColumn = $candidateKey;
+            break;
+        }
+    }
+    if ($titleColumn === null) {
+        return ['ok' => false, 'message' => 'Tabela nie ma kolumny nazwy/tytulu.', 'inserted' => 0, 'skipped' => count($titles)];
+    }
+
+    $safeTable = neuronetix_safe_identifier($table);
+    $safeTitle = neuronetix_safe_identifier($titleColumn);
+    if ($safeTable === null || $safeTitle === null) {
+        return ['ok' => false, 'message' => 'Nieprawidlowa konfiguracja tabeli.', 'inserted' => 0, 'skipped' => count($titles)];
+    }
+
+    $inserted = 0;
+    $skipped = 0;
+    $sql = 'INSERT INTO `' . $safeTable . '` (`' . $safeTitle . '`) VALUES (?)';
+    $stmt = $pdo->prepare($sql);
+
+    $seen = [];
+    foreach ($titles as $rawTitle) {
+        $title = trim((string) $rawTitle);
+        if ($title === '') {
+            $skipped++;
+            continue;
+        }
+        $key = strtolower($title);
+        if (isset($seen[$key])) {
+            $skipped++;
+            continue;
+        }
+        $seen[$key] = true;
+
+        try {
+            $stmt->execute([$title]);
+            $inserted++;
+        } catch (Throwable $e) {
+            $skipped++;
+        }
+    }
+
+    return [
+        'ok' => true,
+        'message' => 'Import CSV zakonczony.',
+        'inserted' => $inserted,
+        'skipped' => $skipped,
+    ];
+}
+
+function neuronetix_render_list_widget(string $widgetTitle, string $basePath, array $result): string
+{
+    $search = (string) ($result['search'] ?? '');
+    $rows = (array) ($result['rows'] ?? []);
+    $total = (int) ($result['total'] ?? 0);
+    $page = (int) ($result['page'] ?? 1);
+    $pages = (int) ($result['pages'] ?? 1);
+
+    $html = '';
+    $html .= '<section class="nx-widget">';
+    $html .= '<h3>' . neuronetix_sanitize($widgetTitle) . '</h3>';
+    $html .= '<form method="get" class="nx-form-row">';
+    $html .= '<input class="nx-input" type="text" name="q" value="' . neuronetix_sanitize($search) . '" placeholder="Szukaj po tytule...">';
+    $html .= '<button class="nx-btn" type="submit">Filtruj</button>';
+    $html .= '<a class="nx-btn" href="' . neuronetix_sanitize($basePath) . '">Wyczysc</a>';
+    $html .= '</form>';
+
+    $html .= '<div class="nx-table-wrap">';
+    $html .= '<table class="nx-table">';
+    $html .= '<thead><tr><th>ID</th><th>Nazwa</th></tr></thead><tbody>';
+    if (empty($rows)) {
+        $html .= '<tr><td colspan="2">Brak wynikow.</td></tr>';
+    } else {
+        foreach ($rows as $row) {
+            $html .= '<tr>';
+            $html .= '<td>' . neuronetix_sanitize((string) ($row['row_id'] ?? '-')) . '</td>';
+            $html .= '<td>' . neuronetix_sanitize((string) ($row['row_label'] ?? '')) . '</td>';
+            $html .= '</tr>';
+        }
+    }
+    $html .= '</tbody></table></div>';
+
+    $html .= '<div class="nx-user-role" style="margin-top:8px;">Wynikow: ' . $total . '</div>';
+
+    if ($pages > 1) {
+        $html .= '<div class="nx-pagination">';
+        for ($i = 1; $i <= $pages; $i++) {
+            $query = http_build_query(['q' => $search, 'page' => $i]);
+            $class = $i === $page ? 'nx-page-link active' : 'nx-page-link';
+            $html .= '<a class="' . $class . '" href="' . neuronetix_sanitize($basePath . '?' . $query) . '">' . $i . '</a>';
+        }
+        $html .= '</div>';
+    }
+
+    $html .= '</section>';
+
+    return $html;
+}
+
+function neuronetix_read_csv_titles(string $tmpPath): array
+{
+    $rows = [];
+    $handle = @fopen($tmpPath, 'rb');
+    if ($handle === false) {
+        return [];
+    }
+
+    $first = fgets($handle);
+    rewind($handle);
+    $delimiter = (substr_count((string) $first, ';') > substr_count((string) $first, ',')) ? ';' : ',';
+
+    while (($data = fgetcsv($handle, 0, $delimiter)) !== false) {
+        if (!is_array($data) || !isset($data[0])) {
+            continue;
+        }
+        $rows[] = trim((string) $data[0]);
+    }
+
+    fclose($handle);
+    return $rows;
+}
+
 /**
  * Sanitize input
  */

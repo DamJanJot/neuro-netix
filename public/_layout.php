@@ -7,6 +7,7 @@ declare(strict_types=1);
 /** @var string $pageDescription */
 /** @var string $panelKey */
 /** @var array<int, array<string, string>> $cards */
+/** @var string $extraHtml */
 
 $user = neuronetix_current_user();
 $navItems = neuronetix_visible_nav();
@@ -15,6 +16,9 @@ $role = (string) ($user['rola'] ?? 'user');
 $fullName = trim((string) ($user['imie'] ?? '') . ' ' . (string) ($user['nazwisko'] ?? ''));
 if ($fullName === '') {
     $fullName = 'Uzytkownik';
+}
+if (!isset($extraHtml)) {
+    $extraHtml = '';
 }
 
 $groupLabels = [
@@ -48,15 +52,6 @@ foreach ($navItems as $item) {
 <body>
 <div class="nx-shell" id="nxShell">
     <aside class="nx-sidebar" id="nxSidebar">
-        <div class="nx-brand-row">
-            <img class="nx-logo" src="assets/img/neuronetix-logo.png" alt="Neuronetix logo">
-            <div>
-                <div class="nx-brand-name">Neuronetix</div>
-                <div class="nx-brand-sub">Panel edukacyjny</div>
-            </div>
-            <button class="nx-mobile-close" id="nxCloseSidebar" aria-label="Zamknij menu">×</button>
-        </div>
-
         <div class="nx-switch nx-switch-side" id="nxSwitch">
             <button class="nx-switch-btn" id="nxSwitchBtn" type="button" aria-expanded="false">
                 <img class="nx-switch-logo" src="assets/img/neuronetix-logo.png" alt="">
@@ -75,6 +70,8 @@ foreach ($navItems as $item) {
                 <?php endforeach; ?>
             </div>
         </div>
+
+        <button class="nx-mobile-close" id="nxCloseSidebar" aria-label="Zamknij menu">×</button>
 
         <nav class="nx-nav">
             <?php foreach ($groupedNav as $groupKey => $items): ?>
@@ -126,6 +123,11 @@ foreach ($navItems as $item) {
                     </article>
                 <?php endforeach; ?>
             </div>
+            <?php if ($extraHtml !== ''): ?>
+                <div class="nx-extra">
+                    <?php echo $extraHtml; ?>
+                </div>
+            <?php endif; ?>
         </section>
     </main>
 </div>
