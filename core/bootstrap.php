@@ -28,6 +28,11 @@ if (file_exists(__DIR__ . '/../config.php')) {
     require_once __DIR__ . '/../config.example.php';
 }
 
+// Composer autoloader (PhpSpreadsheet etc.)
+if (file_exists(__DIR__ . '/../vendor/autoload.php')) {
+    require_once __DIR__ . '/../vendor/autoload.php';
+}
+
 // Session
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -446,7 +451,7 @@ function neuronetix_preview_rows(array $tableCandidates, array $titleCandidates,
     }
 }
 
-function neuronetix_paginated_rows(array $tableCandidates, array $titleCandidates, string $search = '', int $page = 1, int $perPage = 10): array
+function neuronetix_paginated_rows(array $tableCandidates, array $titleCandidates, string $search = '', int $page = 1, int $perPage = 10, array $extraConditions = []): array
 {
     $pdo = neuronetix_get_pdo();
     $table = neuronetix_first_existing_table($tableCandidates);
@@ -516,12 +521,20 @@ function neuronetix_paginated_rows(array $tableCandidates, array $titleCandidate
 
     $page = max(1, $page);
     $perPage = max(1, min(50, $perPage));
-    $whereSql = '';
+    $whereParts = [];
     $params = [];
+    foreach ($extraConditions as $cond) {
+        $condCol = neuronetix_safe_identifier((string) ($cond['column'] ?? ''));
+        if ($condCol !== null) {
+            $whereParts[] = '`' . $condCol . '` = ?';
+            $params[] = (string) ($cond['value'] ?? '');
+        }
+    }
     if ($search !== '') {
-        $whereSql = ' WHERE `' . $safeTitle . '` LIKE ? ';
+        $whereParts[] = '`' . $safeTitle . '` LIKE ?';
         $params[] = '%' . $search . '%';
     }
+    $whereSql = empty($whereParts) ? '' : ' WHERE ' . implode(' AND ', $whereParts);
 
     try {
         $countStmt = $pdo->prepare('SELECT COUNT(*) FROM `' . $safeTable . '`' . $whereSql);
@@ -566,8 +579,9 @@ function neuronetix_import_csv_to_module(string $module, array $titles): array
             'title_columns' => ['title', 'name', 'quiz_title'],
         ],
         'tests' => [
-            'tables' => ['neuronetix_tests', 'neuronetix_student_tests'],
-            'title_columns' => ['title', 'name', 'test_title'],
+            'tables' => ['neuronetix_quizzes'],
+            'title_columns' => ['title', 'name', 'quiz_title'],
+            'extra_columns' => ['quiz_type' => 'test'],
         ],
         'tasks' => [
             'tables' => ['neuronetix_teacher_tasks', 'neuronetix_tasks'],
@@ -612,9 +626,22 @@ function neuronetix_import_csv_to_module(string $module, array $titles): array
         return ['ok' => false, 'message' => 'Nieprawidlowa konfiguracja tabeli.', 'inserted' => 0, 'skipped' => count($titles)];
     }
 
+    $extraColumns = (array) ($moduleMap[$module]['extra_columns'] ?? []);
+    $extraColsSql = '';
+    $extraPlaceholders = '';
+    $extraValues = [];
+    foreach ($extraColumns as $ecName => $ecValue) {
+        $safeEc = neuronetix_safe_identifier((string) $ecName);
+        if ($safeEc !== null) {
+            $extraColsSql .= ', `' . $safeEc . '`';
+            $extraPlaceholders .= ', ?';
+            $extraValues[] = (string) $ecValue;
+        }
+    }
+
     $inserted = 0;
     $skipped = 0;
-    $sql = 'INSERT INTO `' . $safeTable . '` (`' . $safeTitle . '`) VALUES (?)';
+    $sql = 'INSERT INTO `' . $safeTable . '` (`' . $safeTitle . '`' . $extraColsSql . ') VALUES (?' . $extraPlaceholders . ')';
     $stmt = $pdo->prepare($sql);
 
     $seen = [];
@@ -632,7 +659,7 @@ function neuronetix_import_csv_to_module(string $module, array $titles): array
         $seen[$key] = true;
 
         try {
-            $stmt->execute([$title]);
+            $stmt->execute(array_merge([$title], $extraValues));
             $inserted++;
         } catch (Throwable $e) {
             $skipped++;
@@ -717,6 +744,91 @@ function neuronetix_read_csv_titles(string $tmpPath): array
 
     fclose($handle);
     return $rows;
+}
+
+function neuronetix_read_xlsx_titles(string $path): array
+{
+    if (!class_exists('\PhpOffice\PhpSpreadsheet\IOFactory')) {
+        return [];
+    }
+    try {
+        $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($path);
+        $sheet = $spreadsheet->getActiveSheet();
+        $titles = [];
+        foreach ($sheet->getRowIterator() as $row) {
+            $cellIterator = $row->getCellIterator();
+            $cellIterator->setIterateOnlyExistingCells(true);
+            foreach ($cellIterator as $cell) {
+                $val = trim((string) $cell->getValue());
+                if ($val !== '') {
+                    $titles[] = $val;
+                }
+                break;
+            }
+        }
+        return $titles;
+    } catch (\Throwable $e) {
+        return [];
+    }
+}
+
+function neuronetix_insert_quiz(
+    string $title,
+    string $description,
+    string $quizType,
+    string $dueDate,
+    bool $isActive,
+    int $userId
+): array {
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO) {
+        return ['ok' => false, 'message' => 'Brak polaczenia z baza.'];
+    }
+    $title = trim($title);
+    if ($title === '') {
+        return ['ok' => false, 'message' => 'Tytul nie moze byc pusty.'];
+    }
+    if (!in_array($quizType, ['quiz', 'test', 'survey'], true)) {
+        $quizType = 'quiz';
+    }
+    try {
+        $stmt = $pdo->prepare(
+            'INSERT INTO `neuronetix_quizzes` (created_by_user_id, title, description, quiz_type, due_date, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW())'
+        );
+        $stmt->execute([$userId, $title, $description, $quizType, $dueDate !== '' ? $dueDate : null, $isActive ? 1 : 0]);
+        return ['ok' => true, 'id' => (int) $pdo->lastInsertId()];
+    } catch (\Throwable $e) {
+        return ['ok' => false, 'message' => 'Blad zapisu: ' . $e->getMessage()];
+    }
+}
+
+function neuronetix_insert_task(
+    string $title,
+    string $description,
+    string $dueDate,
+    string $status,
+    int $userId
+): array {
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO) {
+        return ['ok' => false, 'message' => 'Brak polaczenia z baza.'];
+    }
+    $title = trim($title);
+    if ($title === '') {
+        return ['ok' => false, 'message' => 'Tytul nie moze byc pusty.'];
+    }
+    if (!in_array($status, ['open', 'in_progress', 'done', 'cancelled'], true)) {
+        $status = 'open';
+    }
+    try {
+        $stmt = $pdo->prepare(
+            'INSERT INTO `neuronetix_teacher_tasks` (created_by_user_id, title, description, due_date, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NOW(), NOW())'
+        );
+        $stmt->execute([$userId, $title, $description, $dueDate !== '' ? $dueDate : null, $status]);
+        return ['ok' => true, 'id' => (int) $pdo->lastInsertId()];
+    } catch (\Throwable $e) {
+        return ['ok' => false, 'message' => 'Blad zapisu: ' . $e->getMessage()];
+    }
 }
 
 /**

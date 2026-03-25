@@ -1,0 +1,16 @@
+{
+    "name": "neuronetix/app",
+    "description": "NeuroNetix educational platform",
+    "require": {
+        "php": ">=7.4",
+        "phpoffice/phpspreadsheet": "^2.0"
+    },
+    "config": {
+        "vendor-dir": "vendor"
+    },
+    "autoload": {
+        "psr-4": {
+            "Neuronetix\\": "src/"
+        }
+    }
+}

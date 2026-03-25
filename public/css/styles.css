@@ -408,6 +408,25 @@ a {
     background: rgba(239, 68, 68, 0.14);
 }
 
+.nx-create-form {
+    display: grid;
+    gap: 8px;
+}
+
+.nx-textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+.nx-label-check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    cursor: pointer;
+    font-size: 13px;
+}
+
 .nx-cards {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
