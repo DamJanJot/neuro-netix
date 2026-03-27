@@ -948,6 +948,111 @@ function neuronetix_fetch_quiz_questions(int $quizId, int $limit = 100): array
     }
 }
 
+function neuronetix_update_quiz_question(
+    int $questionId,
+    int $quizId,
+    string $questionText,
+    string $optionA,
+    string $optionB,
+    string $optionC,
+    string $optionD,
+    string $correctOption,
+    int $points = 1
+): array {
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO) {
+        return ['ok' => false, 'message' => 'Brak polaczenia z baza.'];
+    }
+
+    $questionId = max(0, $questionId);
+    $quizId = max(0, $quizId);
+    $questionText = trim($questionText);
+    $optionA = trim($optionA);
+    $optionB = trim($optionB);
+    $optionC = trim($optionC);
+    $optionD = trim($optionD);
+    $correctOption = strtoupper(trim($correctOption));
+    $points = max(1, min(100, $points));
+
+    if ($questionId <= 0 || $quizId <= 0) {
+        return ['ok' => false, 'message' => 'Nieprawidlowe dane pytania.'];
+    }
+    if ($questionText === '' || $optionA === '' || $optionB === '' || $optionC === '' || $optionD === '') {
+        return ['ok' => false, 'message' => 'Pytanie i odpowiedzi A/B/C/D sa wymagane.'];
+    }
+    if (!in_array($correctOption, ['A', 'B', 'C', 'D'], true)) {
+        return ['ok' => false, 'message' => 'Poprawna odpowiedz musi byc jedna z: A, B, C, D.'];
+    }
+
+    try {
+        $check = $pdo->prepare('SELECT id FROM `neuronetix_quiz_questions` WHERE id = ? AND quiz_id = ? LIMIT 1');
+        $check->execute([$questionId, $quizId]);
+        if (!$check->fetchColumn()) {
+            return ['ok' => false, 'message' => 'Pytanie nie istnieje w wybranym quizie.'];
+        }
+
+        $options = [
+            'A' => $optionA,
+            'B' => $optionB,
+            'C' => $optionC,
+            'D' => $optionD,
+        ];
+
+        $stmt = $pdo->prepare(
+            'UPDATE `neuronetix_quiz_questions` SET question_text = ?, options_json = ?, correct_answer = ?, points = ?, updated_at = NOW() WHERE id = ? AND quiz_id = ?'
+        );
+        $stmt->execute([
+            $questionText,
+            json_encode($options, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            $correctOption,
+            $points,
+            $questionId,
+            $quizId,
+        ]);
+
+        return ['ok' => true];
+    } catch (\Throwable $e) {
+        return ['ok' => false, 'message' => 'Blad aktualizacji pytania: ' . $e->getMessage()];
+    }
+}
+
+function neuronetix_delete_quiz_question(int $questionId, int $quizId): array
+{
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO) {
+        return ['ok' => false, 'message' => 'Brak polaczenia z baza.'];
+    }
+
+    $questionId = max(0, $questionId);
+    $quizId = max(0, $quizId);
+    if ($questionId <= 0 || $quizId <= 0) {
+        return ['ok' => false, 'message' => 'Nieprawidlowe dane pytania.'];
+    }
+
+    try {
+        $stmt = $pdo->prepare('DELETE FROM `neuronetix_quiz_questions` WHERE id = ? AND quiz_id = ? LIMIT 1');
+        $stmt->execute([$questionId, $quizId]);
+        if ($stmt->rowCount() < 1) {
+            return ['ok' => false, 'message' => 'Pytanie nie istnieje lub zostalo juz usuniete.'];
+        }
+
+        $reorderStmt = $pdo->prepare('SELECT id FROM `neuronetix_quiz_questions` WHERE quiz_id = ? ORDER BY position ASC, id ASC');
+        $reorderStmt->execute([$quizId]);
+        $ids = $reorderStmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+
+        $updatePos = $pdo->prepare('UPDATE `neuronetix_quiz_questions` SET position = ?, updated_at = NOW() WHERE id = ?');
+        $position = 1;
+        foreach ($ids as $id) {
+            $updatePos->execute([$position, (int) $id]);
+            $position++;
+        }
+
+        return ['ok' => true];
+    } catch (\Throwable $e) {
+        return ['ok' => false, 'message' => 'Blad usuwania pytania: ' . $e->getMessage()];
+    }
+}
+
 /**
  * Sanitize input
  */

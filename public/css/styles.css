@@ -438,6 +438,32 @@ a {
     line-height: 1.45;
 }
 
+.nx-row-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.nx-row-actions form {
+    margin: 0;
+}
+
+.nx-inline-link {
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+}
+
+.nx-btn-danger {
+    border-color: rgba(239, 68, 68, 0.45);
+    background: rgba(239, 68, 68, 0.12);
+}
+
+.nx-btn-danger:hover {
+    border-color: rgba(239, 68, 68, 0.8);
+    background: rgba(239, 68, 68, 0.2);
+}
+
 .nx-cards {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
