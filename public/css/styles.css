@@ -427,6 +427,17 @@ a {
     font-size: 13px;
 }
 
+.nx-qa-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.nx-qa-list {
+    white-space: normal;
+    line-height: 1.45;
+}
+
 .nx-cards {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -492,6 +503,10 @@ a {
     }
 
     .nx-form-row {
+        grid-template-columns: 1fr;
+    }
+
+    .nx-qa-grid {
         grid-template-columns: 1fr;
     }
 

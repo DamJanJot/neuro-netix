@@ -831,6 +831,123 @@ function neuronetix_insert_task(
     }
 }
 
+function neuronetix_fetch_quizzes_for_select(string $quizType = 'quiz', int $limit = 200): array
+{
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO) {
+        return [];
+    }
+
+    $limit = max(1, min(500, $limit));
+    try {
+        $stmt = $pdo->prepare(
+            'SELECT id, title FROM `neuronetix_quizzes` WHERE quiz_type = ? ORDER BY created_at DESC LIMIT ' . $limit
+        );
+        $stmt->execute([$quizType]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (\Throwable $e) {
+        return [];
+    }
+}
+
+function neuronetix_insert_quiz_question(
+    int $quizId,
+    string $questionText,
+    string $optionA,
+    string $optionB,
+    string $optionC,
+    string $optionD,
+    string $correctOption,
+    int $points = 1
+): array {
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO) {
+        return ['ok' => false, 'message' => 'Brak polaczenia z baza.'];
+    }
+
+    $quizId = max(0, $quizId);
+    $questionText = trim($questionText);
+    $optionA = trim($optionA);
+    $optionB = trim($optionB);
+    $optionC = trim($optionC);
+    $optionD = trim($optionD);
+    $correctOption = strtoupper(trim($correctOption));
+    $points = max(1, min(100, $points));
+
+    if ($quizId <= 0) {
+        return ['ok' => false, 'message' => 'Wybierz quiz.'];
+    }
+    if ($questionText === '' || $optionA === '' || $optionB === '' || $optionC === '' || $optionD === '') {
+        return ['ok' => false, 'message' => 'Pytanie i odpowiedzi A/B/C/D sa wymagane.'];
+    }
+    if (!in_array($correctOption, ['A', 'B', 'C', 'D'], true)) {
+        return ['ok' => false, 'message' => 'Poprawna odpowiedz musi byc jedna z: A, B, C, D.'];
+    }
+
+    try {
+        $check = $pdo->prepare('SELECT id FROM `neuronetix_quizzes` WHERE id = ? LIMIT 1');
+        $check->execute([$quizId]);
+        if (!$check->fetchColumn()) {
+            return ['ok' => false, 'message' => 'Wybrany quiz nie istnieje.'];
+        }
+
+        $posStmt = $pdo->prepare('SELECT COALESCE(MAX(position), 0) + 1 AS next_pos FROM `neuronetix_quiz_questions` WHERE quiz_id = ?');
+        $posStmt->execute([$quizId]);
+        $position = (int) ($posStmt->fetchColumn() ?: 1);
+
+        $options = [
+            'A' => $optionA,
+            'B' => $optionB,
+            'C' => $optionC,
+            'D' => $optionD,
+        ];
+
+        $stmt = $pdo->prepare(
+            'INSERT INTO `neuronetix_quiz_questions` (quiz_id, position, question_text, question_type, options_json, correct_answer, points, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())'
+        );
+        $stmt->execute([
+            $quizId,
+            $position,
+            $questionText,
+            'single_choice',
+            json_encode($options, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            $correctOption,
+            $points,
+        ]);
+
+        return ['ok' => true, 'id' => (int) $pdo->lastInsertId()];
+    } catch (\Throwable $e) {
+        return ['ok' => false, 'message' => 'Blad zapisu pytania: ' . $e->getMessage()];
+    }
+}
+
+function neuronetix_fetch_quiz_questions(int $quizId, int $limit = 100): array
+{
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO || $quizId <= 0) {
+        return [];
+    }
+
+    $limit = max(1, min(500, $limit));
+    try {
+        $stmt = $pdo->prepare(
+            'SELECT id, position, question_text, options_json, correct_answer, points FROM `neuronetix_quiz_questions` WHERE quiz_id = ? ORDER BY position ASC LIMIT ' . $limit
+        );
+        $stmt->execute([$quizId]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        foreach ($rows as &$row) {
+            $decoded = json_decode((string) ($row['options_json'] ?? ''), true);
+            $row['options'] = is_array($decoded) ? $decoded : [];
+        }
+        unset($row);
+
+        return $rows;
+    } catch (\Throwable $e) {
+        return [];
+    }
+}
+
 /**
  * Sanitize input
  */

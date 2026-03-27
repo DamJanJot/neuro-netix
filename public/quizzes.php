@@ -9,6 +9,8 @@ neuronetix_ensure_panel_access('student_quizzes');
 
 $createNotice = '';
 $createError  = '';
+$questionNotice = '';
+$questionError = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') === 'create_quiz') {
     $user   = neuronetix_current_user();
@@ -30,10 +32,48 @@ if ((string) ($_GET['created'] ?? '') === '1') {
     $createNotice = 'Quiz zostal dodany do bazy.';
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') === 'create_quiz_question') {
+    $quizId = (int) ($_POST['question_quiz_id'] ?? 0);
+    $result = neuronetix_insert_quiz_question(
+        $quizId,
+        (string) ($_POST['question_text'] ?? ''),
+        (string) ($_POST['option_a'] ?? ''),
+        (string) ($_POST['option_b'] ?? ''),
+        (string) ($_POST['option_c'] ?? ''),
+        (string) ($_POST['option_d'] ?? ''),
+        (string) ($_POST['correct_option'] ?? ''),
+        (int) ($_POST['question_points'] ?? 1)
+    );
+
+    if ((bool) ($result['ok'] ?? false)) {
+        header('Location: /neuronetix/public/quizzes.php?question_created=1&quiz_id=' . $quizId);
+        exit();
+    }
+
+    $questionError = neuronetix_sanitize((string) ($result['message'] ?? 'Blad zapisu pytania.'));
+}
+if ((string) ($_GET['question_created'] ?? '') === '1') {
+    $questionNotice = 'Pytanie zostalo dodane do quizu.';
+}
+
 $search   = trim((string) ($_GET['q'] ?? ''));
 $page     = max(1, (int) ($_GET['page'] ?? 1));
-$list     = neuronetix_paginated_rows(['neuronetix_quizzes'], ['title', 'name', 'quiz_title'], $search, $page, 10);
+$list = neuronetix_paginated_rows(
+    ['neuronetix_quizzes'],
+    ['title', 'name', 'quiz_title'],
+    $search,
+    $page,
+    10,
+    [['column' => 'quiz_type', 'value' => 'quiz']]
+);
 $quizCount = (int) ($list['total'] ?? 0);
+
+$quizItems = neuronetix_fetch_quizzes_for_select('quiz', 200);
+$selectedQuizId = (int) ($_GET['quiz_id'] ?? ($_POST['question_quiz_id'] ?? 0));
+if ($selectedQuizId <= 0 && !empty($quizItems)) {
+    $selectedQuizId = (int) ($quizItems[0]['id'] ?? 0);
+}
+$selectedQuizQuestions = neuronetix_fetch_quiz_questions($selectedQuizId, 200);
 
 $latestQuizzes = neuronetix_preview_rows(['neuronetix_quizzes'], ['title', 'name', 'quiz_title'], 3);
 $latestLabel   = !empty($latestQuizzes) ? implode(', ', array_map('neuronetix_sanitize', $latestQuizzes)) : 'Brak wpisow w bazie.';
@@ -68,6 +108,90 @@ $extraHtml .= '<label class="nx-label-check"><input type="checkbox" name="quiz_a
 $extraHtml .= '<button class="nx-btn" type="submit">Dodaj quiz</button>';
 $extraHtml .= '</div>';
 $extraHtml .= '</form>';
+$extraHtml .= '</section>';
+
+$extraHtml .= '<section class="nx-widget">';
+$extraHtml .= '<h3>Pytania i odpowiedzi (A / B / C / D)</h3>';
+if ($questionNotice !== '') {
+    $extraHtml .= '<div class="nx-alert ok">' . neuronetix_sanitize($questionNotice) . '</div>';
+}
+if ($questionError !== '') {
+    $extraHtml .= '<div class="nx-alert err">' . $questionError . '</div>';
+}
+
+if (empty($quizItems)) {
+    $extraHtml .= '<div class="nx-user-role">Najpierw utworz quiz, a potem dodaj pytania.</div>';
+} else {
+    $extraHtml .= '<form method="post" class="nx-create-form">';
+    $extraHtml .= '<input type="hidden" name="action" value="create_quiz_question">';
+    $extraHtml .= '<label class="nx-user-role">Quiz</label>';
+    $extraHtml .= '<select name="question_quiz_id" class="nx-select" required>';
+    foreach ($quizItems as $quizItem) {
+        $qid = (int) ($quizItem['id'] ?? 0);
+        $qtitle = (string) ($quizItem['title'] ?? '');
+        $selected = $qid === $selectedQuizId ? ' selected' : '';
+        $extraHtml .= '<option value="' . $qid . '"' . $selected . '>#' . $qid . ' - ' . neuronetix_sanitize($qtitle) . '</option>';
+    }
+    $extraHtml .= '</select>';
+
+    $extraHtml .= '<textarea class="nx-input nx-textarea" name="question_text" placeholder="Tresc pytania *" rows="3" required></textarea>';
+    $extraHtml .= '<div class="nx-qa-grid">';
+    $extraHtml .= '<input class="nx-input" type="text" name="option_a" placeholder="A: odpowiedz" required maxlength="255">';
+    $extraHtml .= '<input class="nx-input" type="text" name="option_b" placeholder="B: odpowiedz" required maxlength="255">';
+    $extraHtml .= '<input class="nx-input" type="text" name="option_c" placeholder="C: odpowiedz" required maxlength="255">';
+    $extraHtml .= '<input class="nx-input" type="text" name="option_d" placeholder="D: odpowiedz" required maxlength="255">';
+    $extraHtml .= '</div>';
+
+    $extraHtml .= '<div class="nx-form-row">';
+    $extraHtml .= '<select name="correct_option" class="nx-select" required>';
+    $extraHtml .= '<option value="A">Poprawna: A</option>';
+    $extraHtml .= '<option value="B">Poprawna: B</option>';
+    $extraHtml .= '<option value="C">Poprawna: C</option>';
+    $extraHtml .= '<option value="D">Poprawna: D</option>';
+    $extraHtml .= '</select>';
+    $extraHtml .= '<input class="nx-input" type="number" name="question_points" min="1" max="100" value="1" required>';
+    $extraHtml .= '<button class="nx-btn" type="submit">Dodaj pytanie</button>';
+    $extraHtml .= '</div>';
+    $extraHtml .= '</form>';
+
+    $extraHtml .= '<form method="get" class="nx-form-row" style="margin-top:10px;">';
+    $extraHtml .= '<input type="hidden" name="q" value="' . neuronetix_sanitize($search) . '">';
+    $extraHtml .= '<label class="nx-user-role">Podglad pytan quizu</label>';
+    $extraHtml .= '<select name="quiz_id" class="nx-select">';
+    foreach ($quizItems as $quizItem) {
+        $qid = (int) ($quizItem['id'] ?? 0);
+        $qtitle = (string) ($quizItem['title'] ?? '');
+        $selected = $qid === $selectedQuizId ? ' selected' : '';
+        $extraHtml .= '<option value="' . $qid . '"' . $selected . '>#' . $qid . ' - ' . neuronetix_sanitize($qtitle) . '</option>';
+    }
+    $extraHtml .= '</select>';
+    $extraHtml .= '<button class="nx-btn" type="submit">Pokaz pytania</button>';
+    $extraHtml .= '</form>';
+
+    $extraHtml .= '<div class="nx-table-wrap" style="margin-top:10px;">';
+    $extraHtml .= '<table class="nx-table">';
+    $extraHtml .= '<thead><tr><th>#</th><th>Pytanie</th><th>Opcje</th><th>Poprawna</th><th>Pkt</th></tr></thead><tbody>';
+    if (empty($selectedQuizQuestions)) {
+        $extraHtml .= '<tr><td colspan="5">Brak pytan w tym quizie.</td></tr>';
+    } else {
+        foreach ($selectedQuizQuestions as $question) {
+            $opts = (array) ($question['options'] ?? []);
+            $optsText = [];
+            foreach (['A', 'B', 'C', 'D'] as $key) {
+                $optsText[] = $key . ') ' . neuronetix_sanitize((string) ($opts[$key] ?? '-'));
+            }
+            $extraHtml .= '<tr>';
+            $extraHtml .= '<td>' . (int) ($question['position'] ?? 0) . '</td>';
+            $extraHtml .= '<td>' . neuronetix_sanitize((string) ($question['question_text'] ?? '')) . '</td>';
+            $extraHtml .= '<td><div class="nx-qa-list">' . implode('<br>', $optsText) . '</div></td>';
+            $extraHtml .= '<td>' . neuronetix_sanitize((string) ($question['correct_answer'] ?? '')) . '</td>';
+            $extraHtml .= '<td>' . (int) ($question['points'] ?? 1) . '</td>';
+            $extraHtml .= '</tr>';
+        }
+    }
+    $extraHtml .= '</tbody></table>';
+    $extraHtml .= '</div>';
+}
 $extraHtml .= '</section>';
 
 require __DIR__ . '/_layout.php';
