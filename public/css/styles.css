@@ -117,6 +117,49 @@ a {
     background: rgba(56, 189, 248, 0.12);
 }
 
+.nx-user-menu .nx-switch-btn {
+    min-height: 42px;
+    padding: 6px 10px;
+    border-radius: 12px;
+    background: rgba(9, 20, 40, 0.95);
+}
+
+.nx-user-trigger-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: #052230;
+    font-weight: 700;
+    display: grid;
+    place-items: center;
+    font-size: 13px;
+}
+
+.nx-user-trigger-meta {
+    display: grid;
+    gap: 1px;
+    text-align: left;
+    line-height: 1.1;
+}
+
+.nx-user-trigger-meta strong {
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.nx-user-trigger-meta small {
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: capitalize;
+}
+
+.nx-user-menu .nx-switch-menu {
+    right: 0;
+    left: auto;
+    min-width: 190px;
+}
+
 .nx-switch-menu {
     display: grid;
     gap: 6px;
@@ -550,6 +593,10 @@ a {
     .nx-topbar {
         align-items: center;
         flex-direction: row;
+    }
+
+    .nx-user-trigger-meta {
+        display: none;
     }
 
     .nx-cards {
