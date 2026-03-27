@@ -5,6 +5,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const closeSidebarBtn = document.getElementById('nxCloseSidebar');
     const appSwitch = document.getElementById('nxSwitch');
     const appSwitchBtn = document.getElementById('nxSwitchBtn');
+    const userMenu = document.getElementById('nxUserMenu');
+    const userMenuBtn = document.getElementById('nxUserMenuBtn');
 
     function closeSidebar() {
         if (!shell || !backdrop) return;
@@ -41,12 +43,35 @@ document.addEventListener('DOMContentLoaded', function () {
             event.stopPropagation();
             const isOpen = appSwitch.classList.toggle('open');
             appSwitchBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            if (isOpen && userMenu && userMenuBtn) {
+                userMenu.classList.remove('open');
+                userMenuBtn.setAttribute('aria-expanded', 'false');
+            }
         });
 
         document.addEventListener('click', function (event) {
             if (!appSwitch.contains(event.target)) {
                 appSwitch.classList.remove('open');
                 appSwitchBtn.setAttribute('aria-expanded', 'false');
+            }
+        });
+    }
+
+    if (userMenu && userMenuBtn) {
+        userMenuBtn.addEventListener('click', function (event) {
+            event.stopPropagation();
+            const isOpen = userMenu.classList.toggle('open');
+            userMenuBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            if (isOpen && appSwitch && appSwitchBtn) {
+                appSwitch.classList.remove('open');
+                appSwitchBtn.setAttribute('aria-expanded', 'false');
+            }
+        });
+
+        document.addEventListener('click', function (event) {
+            if (!userMenu.contains(event.target)) {
+                userMenu.classList.remove('open');
+                userMenuBtn.setAttribute('aria-expanded', 'false');
             }
         });
     }

@@ -91,21 +91,36 @@ foreach ($navItems as $item) {
                 </section>
             <?php endforeach; ?>
         </nav>
-
-        <div class="nx-user-box">
-            <div class="nx-user-avatar"><?php echo neuronetix_sanitize(strtoupper(substr($fullName, 0, 1))); ?></div>
-            <div>
-                <div class="nx-user-name"><?php echo neuronetix_sanitize($fullName); ?></div>
-                <div class="nx-user-role">Rola: <?php echo neuronetix_sanitize($role); ?></div>
-            </div>
-        </div>
     </aside>
 
     <main class="nx-main">
         <header class="nx-topbar">
             <button class="nx-mobile-open" id="nxOpenSidebar" aria-label="Otworz menu">☰</button>
             <div class="nx-top-actions">
-                <a class="nx-logout" href="logout.php">Wyloguj</a>
+                <div class="nx-switch nx-user-menu" id="nxUserMenu">
+                    <button class="nx-switch-btn" id="nxUserMenuBtn" type="button" aria-expanded="false">
+                        <span class="nx-user-trigger-avatar"><?php echo neuronetix_sanitize(strtoupper(substr($fullName, 0, 1))); ?></span>
+                        <span class="nx-user-trigger-meta">
+                            <strong><?php echo neuronetix_sanitize($fullName); ?></strong>
+                            <small><?php echo neuronetix_sanitize($role); ?></small>
+                        </span>
+                        <span class="nx-switch-arrow">▾</span>
+                    </button>
+                    <div class="nx-switch-menu" id="nxUserMenuList">
+                        <a class="nx-switch-item" href="profile.php">
+                            <span>👤</span>
+                            <span>Profil</span>
+                        </a>
+                        <a class="nx-switch-item" href="settings.php">
+                            <span>⚙</span>
+                            <span>Ustawienia</span>
+                        </a>
+                        <a class="nx-switch-item" href="logout.php">
+                            <span>↩</span>
+                            <span>Wyloguj</span>
+                        </a>
+                    </div>
+                </div>
             </div>
         </header>
 
