@@ -507,6 +507,63 @@ a {
     background: rgba(239, 68, 68, 0.2);
 }
 
+.nx-daily-question {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 10px;
+    background: rgba(255, 255, 255, 0.02);
+    margin-bottom: 10px;
+}
+
+.nx-daily-prompt {
+    margin-top: 4px;
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+}
+
+.nx-option-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.nx-option-grid form {
+    margin: 0;
+}
+
+.nx-option-btn {
+    width: 100%;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text);
+    min-height: 48px;
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    text-align: left;
+}
+
+.nx-option-btn:hover {
+    border-color: rgba(45, 212, 191, 0.6);
+    background: rgba(45, 212, 191, 0.12);
+}
+
+.nx-option-letter {
+    width: 24px;
+    height: 24px;
+    border-radius: 7px;
+    border: 1px solid var(--line);
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+}
+
 .nx-cards {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -576,6 +633,10 @@ a {
     }
 
     .nx-qa-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .nx-option-grid {
         grid-template-columns: 1fr;
     }
 

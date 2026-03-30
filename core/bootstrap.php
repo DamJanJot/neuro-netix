@@ -7,6 +7,13 @@ declare(strict_types=1);
  * Core initialization and setup
  */
 
+// Load configuration
+if (file_exists(__DIR__ . '/../config.php')) {
+    require_once __DIR__ . '/../config.php';
+} else {
+    require_once __DIR__ . '/../config.example.php';
+}
+
 // Error handling
 if (!defined('NEURONETIX_DEBUG')) {
     define('NEURONETIX_DEBUG', false);
@@ -19,13 +26,6 @@ if (NEURONETIX_DEBUG) {
     error_reporting(E_ALL);
     ini_set('display_errors', '0');
     ini_set('log_errors', '1');
-}
-
-// Load configuration
-if (file_exists(__DIR__ . '/../config.php')) {
-    require_once __DIR__ . '/../config.php';
-} else {
-    require_once __DIR__ . '/../config.example.php';
 }
 
 // Composer autoloader (PhpSpreadsheet etc.)
@@ -945,6 +945,572 @@ function neuronetix_fetch_quiz_questions(int $quizId, int $limit = 100): array
         return $rows;
     } catch (\Throwable $e) {
         return [];
+    }
+}
+
+function neuronetix_ensure_subject_knowledge_catalog(): void
+{
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO) {
+        return;
+    }
+
+    try {
+        $pdo->exec(
+            'CREATE TABLE IF NOT EXISTS `neuronetix_subjects` (
+                `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                `slug` VARCHAR(120) NOT NULL,
+                `name` VARCHAR(180) NOT NULL,
+                `description` TEXT NULL,
+                `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+                `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `uniq_slug` (`slug`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+        );
+
+        $pdo->exec(
+            'CREATE TABLE IF NOT EXISTS `neuronetix_subject_sections` (
+                `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                `subject_id` INT UNSIGNED NOT NULL,
+                `slug` VARCHAR(120) NOT NULL,
+                `name` VARCHAR(180) NOT NULL,
+                `description` TEXT NULL,
+                `source_type` VARCHAR(50) NULL,
+                `source_ref` VARCHAR(80) NULL,
+                `sort_order` INT NOT NULL DEFAULT 0,
+                `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (`id`),
+                UNIQUE KEY `uniq_subject_slug` (`subject_id`, `slug`),
+                KEY `idx_subject_id` (`subject_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+        );
+    } catch (\Throwable $e) {
+        return;
+    }
+
+    try {
+        $stmtSub = $pdo->prepare(
+            'INSERT INTO `neuronetix_subjects` (`slug`, `name`, `description`, `is_active`) VALUES (?, ?, ?, 1)
+             ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `description` = VALUES(`description`), `is_active` = VALUES(`is_active`)'
+        );
+        $stmtSub->execute(['english', 'Jezyk angielski', 'Codzienne slowka i mini-quizy A/B/C/D z adaptacyjnymi powtorkami.']);
+        $stmtSub->execute(['legacy-excel', 'Excel i analityka (legacy)', 'Wczesniejszy material znaleziony w starej tabeli pytan.']);
+
+        $subIdStmt = $pdo->prepare('SELECT id FROM `neuronetix_subjects` WHERE slug = ? LIMIT 1');
+        $subIdStmt->execute(['english']);
+        $englishId = (int) ($subIdStmt->fetchColumn() ?: 0);
+
+        $subIdStmt->execute(['legacy-excel']);
+        $legacyId = (int) ($subIdStmt->fetchColumn() ?: 0);
+
+        if ($englishId > 0) {
+            $englishSections = [
+                ['slug' => 'a1-basics', 'name' => 'A1 Basics', 'description' => 'Podstawowe slowa i zwroty na start.', 'sort_order' => 10],
+                ['slug' => 'home-family', 'name' => 'Dom i rodzina', 'description' => 'Codzienne slownictwo domowe.', 'sort_order' => 20],
+                ['slug' => 'food-drinks', 'name' => 'Jedzenie i napoje', 'description' => 'Produkty, zamawianie i rozmowy przy stole.', 'sort_order' => 30],
+                ['slug' => 'travel-city', 'name' => 'Podroze i miasto', 'description' => 'Transport, kierunki i miejsca.', 'sort_order' => 40],
+                ['slug' => 'school-work', 'name' => 'Szkola i praca', 'description' => 'Slowa do nauki i codziennej organizacji.', 'sort_order' => 50],
+                ['slug' => 'technology-digital', 'name' => 'Technologia', 'description' => 'Nowoczesne slownictwo cyfrowe.', 'sort_order' => 60],
+            ];
+
+            $stmtSec = $pdo->prepare(
+                'INSERT INTO `neuronetix_subject_sections` (`subject_id`, `slug`, `name`, `description`, `source_type`, `source_ref`, `sort_order`)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `description` = VALUES(`description`), `source_type` = VALUES(`source_type`), `source_ref` = VALUES(`source_ref`), `sort_order` = VALUES(`sort_order`)'
+            );
+
+            foreach ($englishSections as $section) {
+                $stmtSec->execute([
+                    $englishId,
+                    (string) $section['slug'],
+                    (string) $section['name'],
+                    (string) $section['description'],
+                    'planned_vocab',
+                    (string) $section['slug'],
+                    (int) $section['sort_order'],
+                ]);
+            }
+        }
+
+        if ($legacyId > 0 && neuronetix_table_exists($pdo, 'pytania')) {
+            $groups = $pdo->query('SELECT quiz_id, COUNT(*) AS cnt, MIN(id) AS first_id FROM `pytania` GROUP BY quiz_id ORDER BY quiz_id ASC')->fetchAll(PDO::FETCH_ASSOC);
+            $stmtGetText = $pdo->prepare('SELECT tresc FROM `pytania` WHERE id = ? LIMIT 1');
+            $stmtSec = $pdo->prepare(
+                'INSERT INTO `neuronetix_subject_sections` (`subject_id`, `slug`, `name`, `description`, `source_type`, `source_ref`, `sort_order`)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `description` = VALUES(`description`), `source_type` = VALUES(`source_type`), `source_ref` = VALUES(`source_ref`), `sort_order` = VALUES(`sort_order`)'
+            );
+
+            $sort = 10;
+            foreach ($groups as $group) {
+                $qid = (string) ($group['quiz_id'] ?? '0');
+                $firstId = (int) ($group['first_id'] ?? 0);
+                $stmtGetText->execute([$firstId]);
+                $sampleText = trim((string) ($stmtGetText->fetchColumn() ?: ''));
+                $short = substr($sampleText, 0, 80);
+                if ($short === '') {
+                    $short = 'Zestaw quizowy ' . $qid;
+                }
+
+                $stmtSec->execute([
+                    $legacyId,
+                    'legacy-quiz-' . preg_replace('/[^0-9a-zA-Z_-]/', '-', $qid),
+                    'Legacy quiz #' . $qid,
+                    $short,
+                    'legacy_pytania',
+                    $qid,
+                    $sort,
+                ]);
+                $sort += 10;
+            }
+        }
+    } catch (\Throwable $e) {
+        return;
+    }
+}
+
+function neuronetix_fetch_subjects_overview(): array
+{
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO) {
+        return [];
+    }
+
+    neuronetix_ensure_subject_knowledge_catalog();
+
+    try {
+        $sql = 'SELECT s.id, s.slug, s.name, s.description, s.is_active, COUNT(ss.id) AS sections_count
+                FROM `neuronetix_subjects` s
+                LEFT JOIN `neuronetix_subject_sections` ss ON ss.subject_id = s.id
+                WHERE s.is_active = 1
+                GROUP BY s.id, s.slug, s.name, s.description, s.is_active
+                ORDER BY s.name ASC';
+        $rows = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        foreach ($rows as &$row) {
+            $subjectId = (int) ($row['id'] ?? 0);
+            $row['sections_count'] = (int) ($row['sections_count'] ?? 0);
+            $row['items_count'] = neuronetix_count_subject_items($subjectId);
+        }
+        unset($row);
+
+        return $rows;
+    } catch (\Throwable $e) {
+        return [];
+    }
+}
+
+function neuronetix_fetch_subject_sections(int $subjectId): array
+{
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO || $subjectId <= 0) {
+        return [];
+    }
+
+    neuronetix_ensure_subject_knowledge_catalog();
+
+    try {
+        $stmt = $pdo->prepare('SELECT id, subject_id, slug, name, description, source_type, source_ref, sort_order FROM `neuronetix_subject_sections` WHERE subject_id = ? ORDER BY sort_order ASC, id ASC');
+        $stmt->execute([$subjectId]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+        foreach ($rows as &$row) {
+            $row['items_count'] = neuronetix_count_section_items((string) ($row['source_type'] ?? ''), (string) ($row['source_ref'] ?? ''));
+        }
+        unset($row);
+
+        return $rows;
+    } catch (\Throwable $e) {
+        return [];
+    }
+}
+
+function neuronetix_count_subject_items(int $subjectId): int
+{
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO || $subjectId <= 0) {
+        return 0;
+    }
+
+    try {
+        $stmt = $pdo->prepare('SELECT source_type, source_ref FROM `neuronetix_subject_sections` WHERE subject_id = ?');
+        $stmt->execute([$subjectId]);
+        $sections = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $sum = 0;
+        foreach ($sections as $section) {
+            $sum += neuronetix_count_section_items((string) ($section['source_type'] ?? ''), (string) ($section['source_ref'] ?? ''));
+        }
+        return $sum;
+    } catch (\Throwable $e) {
+        return 0;
+    }
+}
+
+function neuronetix_count_section_items(string $sourceType, string $sourceRef): int
+{
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO) {
+        return 0;
+    }
+
+    try {
+        if ($sourceType === 'legacy_pytania' && $sourceRef !== '' && neuronetix_table_exists($pdo, 'pytania')) {
+            $stmt = $pdo->prepare('SELECT COUNT(*) FROM `pytania` WHERE quiz_id = ?');
+            $stmt->execute([$sourceRef]);
+            return (int) ($stmt->fetchColumn() ?: 0);
+        }
+
+        if ($sourceType === 'planned_vocab') {
+            if ($sourceRef !== '') {
+                $stmt = $pdo->prepare('SELECT s.name FROM `neuronetix_subject_sections` s WHERE s.source_type = ? AND s.slug = ? LIMIT 1');
+                $stmt->execute([$sourceType, $sourceRef]);
+                $sectionName = (string) ($stmt->fetchColumn() ?: '');
+                if ($sectionName === '') {
+                    return 0;
+                }
+                $setStmt = $pdo->prepare('SELECT id FROM `vocab_sets` WHERE name = ? LIMIT 1');
+                $setStmt->execute([$sectionName]);
+                $setId = (int) ($setStmt->fetchColumn() ?: 0);
+                if ($setId > 0) {
+                    $cntStmt = $pdo->prepare('SELECT COUNT(*) FROM `vocab_set_words` WHERE set_id = ?');
+                    $cntStmt->execute([$setId]);
+                    return (int) ($cntStmt->fetchColumn() ?: 0);
+                }
+            }
+            return 0;
+        }
+
+        return 0;
+    } catch (\Throwable $e) {
+        return 0;
+    }
+}
+
+function neuronetix_ensure_english_vocab_seed(): void
+{
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO) {
+        return;
+    }
+
+    neuronetix_ensure_subject_knowledge_catalog();
+
+    try {
+        $subStmt = $pdo->prepare('SELECT id FROM `neuronetix_subjects` WHERE slug = ? LIMIT 1');
+        $subStmt->execute(['english']);
+        $subjectId = (int) ($subStmt->fetchColumn() ?: 0);
+        if ($subjectId <= 0) {
+            return;
+        }
+
+        $sections = [
+            'a1-basics' => [
+                ['hello', 'czesc'], ['good morning', 'dzien dobry'], ['good night', 'dobranoc'], ['thank you', 'dziekuje'],
+                ['please', 'prosze'], ['yes', 'tak'], ['no', 'nie'], ['sorry', 'przepraszam'], ['name', 'imie'], ['friend', 'przyjaciel'],
+            ],
+            'home-family' => [
+                ['house', 'dom'], ['room', 'pokoj'], ['kitchen', 'kuchnia'], ['bed', 'lozko'], ['mother', 'mama'],
+                ['father', 'tata'], ['sister', 'siostra'], ['brother', 'brat'], ['child', 'dziecko'], ['family', 'rodzina'],
+            ],
+            'food-drinks' => [
+                ['water', 'woda'], ['bread', 'chleb'], ['milk', 'mleko'], ['apple', 'jablko'], ['breakfast', 'sniadanie'],
+                ['lunch', 'obiad'], ['dinner', 'kolacja'], ['coffee', 'kawa'], ['tea', 'herbata'], ['hungry', 'glodny'],
+            ],
+            'travel-city' => [
+                ['street', 'ulica'], ['city', 'miasto'], ['bus', 'autobus'], ['train', 'pociag'], ['ticket', 'bilet'],
+                ['station', 'stacja'], ['left', 'lewo'], ['right', 'prawo'], ['straight', 'prosto'], ['map', 'mapa'],
+            ],
+            'school-work' => [
+                ['school', 'szkola'], ['teacher', 'nauczyciel'], ['student', 'uczen'], ['book', 'ksiazka'], ['pen', 'dlugopis'],
+                ['notebook', 'zeszyt'], ['homework', 'praca domowa'], ['lesson', 'lekcja'], ['office', 'biuro'], ['meeting', 'spotkanie'],
+            ],
+            'technology-digital' => [
+                ['computer', 'komputer'], ['phone', 'telefon'], ['screen', 'ekran'], ['keyboard', 'klawiatura'], ['mouse', 'mysz'],
+                ['internet', 'internet'], ['password', 'haslo'], ['email', 'e-mail'], ['download', 'pobrac'], ['upload', 'wyslac'],
+            ],
+        ];
+
+        $secStmt = $pdo->prepare('SELECT id, slug, name FROM `neuronetix_subject_sections` WHERE subject_id = ?');
+        $secStmt->execute([$subjectId]);
+        $sectionRows = $secStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $sectionBySlug = [];
+        foreach ($sectionRows as $row) {
+            $sectionBySlug[(string) ($row['slug'] ?? '')] = $row;
+        }
+
+        $setFindStmt = $pdo->prepare('SELECT id FROM `vocab_sets` WHERE name = ? AND subject_id = ? LIMIT 1');
+        $setInsertStmt = $pdo->prepare('INSERT INTO `vocab_sets` (`name`, `subject_id`) VALUES (?, ?)');
+        $wordFindStmt = $pdo->prepare('SELECT id FROM `vocab_words` WHERE from_text = ? AND to_text = ? LIMIT 1');
+        $wordInsertStmt = $pdo->prepare('INSERT INTO `vocab_words` (`lang_from`, `lang_to`, `from_text`, `to_text`, `pos`, `tags`) VALUES (?, ?, ?, ?, ?, ?)');
+        $mapStmt = $pdo->prepare('INSERT IGNORE INTO `vocab_set_words` (`set_id`, `word_id`, `position`) VALUES (?, ?, ?)');
+
+        foreach ($sections as $slug => $pairs) {
+            if (!isset($sectionBySlug[$slug])) {
+                continue;
+            }
+            $sectionName = (string) ($sectionBySlug[$slug]['name'] ?? $slug);
+
+            $setFindStmt->execute([$sectionName, $subjectId]);
+            $setId = (int) ($setFindStmt->fetchColumn() ?: 0);
+            if ($setId <= 0) {
+                $setInsertStmt->execute([$sectionName, $subjectId]);
+                $setId = (int) $pdo->lastInsertId();
+            }
+
+            $position = 1;
+            foreach ($pairs as $pair) {
+                $from = (string) ($pair[0] ?? '');
+                $to = (string) ($pair[1] ?? '');
+                if ($from === '' || $to === '') {
+                    $position++;
+                    continue;
+                }
+
+                $wordFindStmt->execute([$from, $to]);
+                $wordId = (int) ($wordFindStmt->fetchColumn() ?: 0);
+                if ($wordId <= 0) {
+                    $wordInsertStmt->execute([
+                        'en',
+                        'pl',
+                        $from,
+                        $to,
+                        null,
+                        json_encode(['section' => $slug, 'subject' => 'english'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                    ]);
+                    $wordId = (int) $pdo->lastInsertId();
+                }
+
+                if ($setId > 0 && $wordId > 0) {
+                    $mapStmt->execute([$setId, $wordId, $position]);
+                }
+                $position++;
+            }
+        }
+    } catch (\Throwable $e) {
+        return;
+    }
+}
+
+function neuronetix_get_vocab_stats(int $userId): array
+{
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO || $userId <= 0) {
+        return ['learned' => 0, 'due_now' => 0, 'total_seen' => 0];
+    }
+
+    try {
+        $seenStmt = $pdo->prepare('SELECT COUNT(*) FROM `user_vocab` WHERE user_id = ?');
+        $seenStmt->execute([$userId]);
+        $totalSeen = (int) ($seenStmt->fetchColumn() ?: 0);
+
+        $learnedStmt = $pdo->prepare('SELECT COUNT(*) FROM `user_vocab` WHERE user_id = ? AND repetitions >= 2');
+        $learnedStmt->execute([$userId]);
+        $learned = (int) ($learnedStmt->fetchColumn() ?: 0);
+
+        $dueStmt = $pdo->prepare('SELECT COUNT(*) FROM `user_vocab` WHERE user_id = ? AND (next_review_at IS NULL OR next_review_at <= NOW())');
+        $dueStmt->execute([$userId]);
+        $dueNow = (int) ($dueStmt->fetchColumn() ?: 0);
+
+        return ['learned' => $learned, 'due_now' => $dueNow, 'total_seen' => $totalSeen];
+    } catch (\Throwable $e) {
+        return ['learned' => 0, 'due_now' => 0, 'total_seen' => 0];
+    }
+}
+
+function neuronetix_pick_daily_vocab_question(int $userId, int $limitPool = 12, ?string $sectionSlug = null): ?array
+{
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO || $userId <= 0) {
+        return null;
+    }
+
+    neuronetix_ensure_english_vocab_seed();
+
+    $sectionSlug = $sectionSlug !== null ? trim($sectionSlug) : null;
+    $subStmt = $pdo->prepare('SELECT id FROM `neuronetix_subjects` WHERE slug = ? LIMIT 1');
+    $subStmt->execute(['english']);
+    $subjectId = (int) ($subStmt->fetchColumn() ?: 0);
+    if ($subjectId <= 0) {
+        return null;
+    }
+
+    $filterSetSql = '';
+    $filterSetParams = [];
+    if ($sectionSlug !== null && $sectionSlug !== '') {
+        $secStmt = $pdo->prepare('SELECT name FROM `neuronetix_subject_sections` WHERE slug = ? LIMIT 1');
+        $secStmt->execute([$sectionSlug]);
+        $sectionName = (string) ($secStmt->fetchColumn() ?: '');
+        if ($sectionName !== '') {
+            $filterSetSql = ' AND vs.name = ? ';
+            $filterSetParams[] = $sectionName;
+        }
+    }
+
+    $dueSql = 'SELECT vw.id, vw.from_text, vw.to_text
+               FROM `user_vocab` uv
+               INNER JOIN `vocab_words` vw ON vw.id = uv.word_id
+               INNER JOIN `vocab_set_words` vsw ON vsw.word_id = vw.id
+               INNER JOIN `vocab_sets` vs ON vs.id = vsw.set_id
+               WHERE uv.user_id = ?
+                 AND (uv.next_review_at IS NULL OR uv.next_review_at <= NOW())
+                 AND vs.subject_id = ? ' . $filterSetSql . '
+               ORDER BY COALESCE(uv.next_review_at, "1970-01-01") ASC, uv.repetitions ASC, vw.id ASC
+               LIMIT ' . max(1, min(30, $limitPool));
+    $dueStmt = $pdo->prepare($dueSql);
+    $dueStmt->execute(array_merge([$userId, $subjectId], $filterSetParams));
+    $dueRows = $dueStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    $newSql = 'SELECT vw.id, vw.from_text, vw.to_text
+               FROM `vocab_words` vw
+               INNER JOIN `vocab_set_words` vsw ON vsw.word_id = vw.id
+               INNER JOIN `vocab_sets` vs ON vs.id = vsw.set_id
+               LEFT JOIN `user_vocab` uv ON uv.word_id = vw.id AND uv.user_id = ?
+               WHERE uv.word_id IS NULL
+                 AND vs.subject_id = ? ' . $filterSetSql . '
+               ORDER BY vw.id ASC
+               LIMIT ' . max(1, min(50, $limitPool));
+    $newStmt = $pdo->prepare($newSql);
+    $newStmt->execute(array_merge([$userId, $subjectId], $filterSetParams));
+    $newRows = $newStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    $poolById = [];
+    foreach ($dueRows as $row) {
+        $wid = (int) ($row['id'] ?? 0);
+        if ($wid > 0) {
+            $poolById[$wid] = $row;
+        }
+        if (count($poolById) >= $limitPool) {
+            break;
+        }
+    }
+    foreach ($newRows as $row) {
+        $wid = (int) ($row['id'] ?? 0);
+        if ($wid > 0 && !isset($poolById[$wid])) {
+            $poolById[$wid] = $row;
+        }
+        if (count($poolById) >= $limitPool) {
+            break;
+        }
+    }
+
+    if (empty($poolById)) {
+        return null;
+    }
+
+    $pool = array_values($poolById);
+    $question = $pool[random_int(0, count($pool) - 1)];
+    $wordId = (int) ($question['id'] ?? 0);
+    $correct = (string) ($question['to_text'] ?? '');
+    if ($wordId <= 0 || $correct === '') {
+        return null;
+    }
+
+    $distStmt = $pdo->prepare('SELECT DISTINCT to_text FROM `vocab_words` WHERE to_text <> ? ORDER BY RAND() LIMIT 20');
+    $distStmt->execute([$correct]);
+    $distractors = $distStmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+
+    $options = [$correct];
+    foreach ($distractors as $candidate) {
+        $candidateText = trim((string) $candidate);
+        if ($candidateText === '' || in_array($candidateText, $options, true)) {
+            continue;
+        }
+        $options[] = $candidateText;
+        if (count($options) >= 4) {
+            break;
+        }
+    }
+    while (count($options) < 4) {
+        $options[] = $correct;
+    }
+    shuffle($options);
+
+    return [
+        'word_id' => $wordId,
+        'prompt' => (string) ($question['from_text'] ?? ''),
+        'correct' => $correct,
+        'options' => $options,
+    ];
+}
+
+function neuronetix_submit_vocab_answer(int $userId, int $wordId, string $selectedAnswer): array
+{
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO || $userId <= 0 || $wordId <= 0) {
+        return ['ok' => false, 'message' => 'Nieprawidlowe dane odpowiedzi.'];
+    }
+
+    try {
+        $wordStmt = $pdo->prepare('SELECT to_text FROM `vocab_words` WHERE id = ? LIMIT 1');
+        $wordStmt->execute([$wordId]);
+        $correct = trim((string) ($wordStmt->fetchColumn() ?: ''));
+        if ($correct === '') {
+            return ['ok' => false, 'message' => 'Nie znaleziono slowka.'];
+        }
+
+        $selectedAnswer = trim($selectedAnswer);
+        $isCorrect = strcasecmp($selectedAnswer, $correct) === 0;
+
+        $uvStmt = $pdo->prepare('SELECT ef, interval_days, repetitions FROM `user_vocab` WHERE user_id = ? AND word_id = ? LIMIT 1');
+        $uvStmt->execute([$userId, $wordId]);
+        $state = $uvStmt->fetch(PDO::FETCH_ASSOC);
+
+        $ef = (float) ($state['ef'] ?? 2.5);
+        $intervalDays = (int) ($state['interval_days'] ?? 0);
+        $repetitions = (int) ($state['repetitions'] ?? 0);
+
+        if ($isCorrect) {
+            $repetitions++;
+            if ($repetitions === 1) {
+                $intervalDays = 0;
+                $nextExpr = 'DATE_ADD(NOW(), INTERVAL 6 HOUR)';
+            } elseif ($repetitions === 2) {
+                $intervalDays = 2;
+                $nextExpr = 'DATE_ADD(NOW(), INTERVAL 2 DAY)';
+            } else {
+                $intervalDays = max(3, (int) ceil(max(1, $intervalDays) * max(1.3, $ef)));
+                $nextExpr = 'DATE_ADD(NOW(), INTERVAL ' . $intervalDays . ' DAY)';
+            }
+            $ef = min(2.8, $ef + 0.08);
+            $quality = 5;
+            $feedback = 'Dobrze! Slowko uznane.';
+        } else {
+            $repetitions = 0;
+            $intervalDays = 0;
+            $ef = max(1.3, $ef - 0.2);
+            $quality = 2;
+            $nextExpr = 'DATE_ADD(NOW(), INTERVAL 15 MINUTE)';
+            $feedback = 'Nie tym razem. To slowko wroci szybciej do powtorki.';
+        }
+
+        $existsStmt = $pdo->prepare('SELECT 1 FROM `user_vocab` WHERE user_id = ? AND word_id = ? LIMIT 1');
+        $existsStmt->execute([$userId, $wordId]);
+        $exists = (bool) $existsStmt->fetchColumn();
+
+        if ($exists) {
+            $sql = 'UPDATE `user_vocab`
+                    SET ef = ?, interval_days = ?, repetitions = ?, last_answer_quality = ?, last_review_at = NOW(), next_review_at = ' . $nextExpr . '
+                    WHERE user_id = ? AND word_id = ?';
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([$ef, $intervalDays, $repetitions, $quality, $userId, $wordId]);
+        } else {
+            $sql = 'INSERT INTO `user_vocab` (user_id, word_id, ef, interval_days, repetitions, last_answer_quality, last_review_at, next_review_at)
+                    VALUES (?, ?, ?, ?, ?, ?, NOW(), ' . $nextExpr . ')';
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([$userId, $wordId, $ef, $intervalDays, $repetitions, $quality]);
+        }
+
+        return [
+            'ok' => true,
+            'correct' => $isCorrect,
+            'correct_answer' => $correct,
+            'feedback' => $feedback,
+        ];
+    } catch (\Throwable $e) {
+        return ['ok' => false, 'message' => 'Blad zapisu odpowiedzi: ' . $e->getMessage()];
     }
 }
 
