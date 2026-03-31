@@ -51,7 +51,8 @@ foreach ($navItems as $item) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?php echo neuronetix_sanitize($pageTitle); ?></title>
-    <link rel="stylesheet" href="css/styles.css">
+    <?php $stylesVersion = (string) @filemtime(__DIR__ . '/css/styles.css'); ?>
+    <link rel="stylesheet" href="css/styles.css?v=<?php echo neuronetix_sanitize($stylesVersion !== '' ? $stylesVersion : (string) time()); ?>">
 </head>
 <body>
 <div class="nx-shell" id="nxShell">
