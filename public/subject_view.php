@@ -43,7 +43,7 @@ foreach ($sections as $sec) {
 // Source type config per subject
 $sourceConfig = [
     'english'    => ['type' => 'planned_vocab', 'btn_label' => 'Ucz sie',    'btn_href_fn' => fn($sec) => '/neuronetix/public/english.php?section=' . urlencode((string)($sec['source_ref'] ?? ''))],
-    'matematyka' => ['type' => 'subject_tasks', 'btn_label' => 'Zadania',    'btn_href_fn' => fn($sec) => '/neuronetix/public/section_tasks.php?section_id=' . (int)($sec['id'] ?? 0)],
+    'matematyka' => ['type' => 'subject_tasks', 'btn_label' => 'Otworz dzial', 'btn_href_fn' => fn($sec) => '/neuronetix/public/section_tasks.php?section_id=' . (int)($sec['id'] ?? 0)],
     'default'    => ['type' => '',              'btn_label' => 'Przejdz',    'btn_href_fn' => null],
 ];
 $cfg = $sourceConfig[$subjectSlug] ?? $sourceConfig['default'];
@@ -67,15 +67,26 @@ $cards          = [
 
 ob_start();
 ?>
-<div class="nx-subjectview">
+<div class="nx-subjectview nx-subjectview--<?php echo neuronetix_sanitize($subjectSlug); ?>">
 
     <div class="nx-sv-hero">
         <div class="nx-sv-icon"><?php echo $subjectIcon; ?></div>
         <div class="nx-sv-meta">
+            <div class="nx-sv-eyebrow">Przedmiot • <?php echo neuronetix_sanitize(str_replace('-', ' ', $subjectSlug)); ?></div>
             <h1 class="nx-sv-title"><?php echo neuronetix_sanitize($subjectName); ?></h1>
             <?php if ($subjectDesc !== ''): ?>
                 <p class="nx-sv-desc"><?php echo neuronetix_sanitize($subjectDesc); ?></p>
             <?php endif; ?>
+            <div class="nx-sv-stats">
+                <div class="nx-sv-stat"><span>Dzialy</span><strong><?php echo count($sections); ?></strong></div>
+                <div class="nx-sv-stat"><span>Materialy</span><strong><?php echo $totalItems; ?></strong></div>
+                <div class="nx-sv-stat"><span>Tryb</span><strong><?php echo neuronetix_sanitize(match ($subjectSlug) {
+                    'english' => 'Powtorki SRS',
+                    'matematyka' => 'Zadania maturalne',
+                    'legacy-excel' => 'Legacy quizy',
+                    default => 'Katalog',
+                }); ?></strong></div>
+            </div>
         </div>
         <a class="nx-sv-back" href="/neuronetix/public/subjects.php">← Wszystkie przedmioty</a>
     </div>
@@ -84,9 +95,12 @@ ob_start();
         <div class="nx-notice">Brak zdefiniowanych dzialow dla tego przedmiotu.</div>
     <?php else: ?>
     <div class="nx-sv-sections">
-        <h2 class="nx-sv-sections-title">Dzialy (<?php echo count($sections); ?>)</h2>
+        <div class="nx-sv-sections-head">
+            <h2 class="nx-sv-sections-title">Dzialy (<?php echo count($sections); ?>)</h2>
+            <div class="nx-sv-sections-subtitle">Kazdy dzial ma osobna sekcje i osobny punkt startowy.</div>
+        </div>
         <div class="nx-sv-grid">
-            <?php foreach ($sections as $sec):
+            <?php foreach ($sections as $index => $sec):
                 $secId     = (int) ($sec['id'] ?? 0);
                 $secName   = (string) ($sec['name'] ?? 'Dzial');
                 $secDesc   = (string) ($sec['description'] ?? '');
@@ -114,10 +128,13 @@ ob_start();
             ?>
             <div class="nx-sv-section-card">
                 <div class="nx-sv-section-head">
-                    <span class="nx-sv-section-name"><?php echo neuronetix_sanitize($secName); ?></span>
-                    <?php if ($sectionBadge[0] !== ''): ?>
-                        <span class="nx-sv-badge <?php echo $sectionBadge[1]; ?>"><?php echo $sectionBadge[0]; ?></span>
-                    <?php endif; ?>
+                    <div class="nx-sv-section-index"><?php echo $index + 1; ?></div>
+                    <div class="nx-sv-section-meta">
+                        <span class="nx-sv-section-name"><?php echo neuronetix_sanitize($secName); ?></span>
+                        <?php if ($sectionBadge[0] !== ''): ?>
+                            <span class="nx-sv-badge <?php echo $sectionBadge[1]; ?>"><?php echo $sectionBadge[0]; ?></span>
+                        <?php endif; ?>
+                    </div>
                 </div>
                 <?php if ($secDesc !== ''): ?>
                     <p class="nx-sv-section-desc"><?php echo neuronetix_sanitize($secDesc); ?></p>

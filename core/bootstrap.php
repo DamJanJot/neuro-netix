@@ -1257,6 +1257,191 @@ function neuronetix_delete_subject_task(int $taskId): array
     }
 }
 
+function neuronetix_fetch_section_with_subject(int $sectionId): ?array
+{
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO || $sectionId <= 0) {
+        return null;
+    }
+
+    try {
+        $stmt = $pdo->prepare(
+            'SELECT ss.id, ss.subject_id, ss.slug, ss.name, ss.description, ss.source_type, ss.source_ref, ss.sort_order,
+                    s.slug AS subject_slug, s.name AS subject_name, s.description AS subject_description
+             FROM `neuronetix_subject_sections` ss
+             INNER JOIN `neuronetix_subjects` s ON s.id = ss.subject_id
+             WHERE ss.id = ? LIMIT 1'
+        );
+        $stmt->execute([$sectionId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return is_array($row) ? $row : null;
+    } catch (\Throwable $e) {
+        return null;
+    }
+}
+
+function neuronetix_ensure_section_knowledge_table(): void
+{
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO) {
+        return;
+    }
+
+    try {
+        $pdo->exec(
+            'CREATE TABLE IF NOT EXISTS `neuronetix_section_knowledge` (
+                `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                `section_id` INT UNSIGNED NOT NULL,
+                `title` VARCHAR(180) NOT NULL,
+                `item_type` ENUM(\'note\',\'file\') NOT NULL DEFAULT \'note\',
+                `content_text` MEDIUMTEXT NULL,
+                `file_path` VARCHAR(255) NULL,
+                `file_name` VARCHAR(255) NULL,
+                `mime_type` VARCHAR(120) NULL,
+                `file_size` INT UNSIGNED NULL,
+                `tags` VARCHAR(255) NULL,
+                `created_by_user_id` INT UNSIGNED NULL,
+                `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (`id`),
+                KEY `idx_section` (`section_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+        );
+    } catch (\Throwable $e) {
+        // ignore
+    }
+}
+
+function neuronetix_fetch_section_knowledge(int $sectionId): array
+{
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO || $sectionId <= 0) {
+        return [];
+    }
+
+    neuronetix_ensure_section_knowledge_table();
+
+    try {
+        $stmt = $pdo->prepare('SELECT * FROM `neuronetix_section_knowledge` WHERE section_id = ? ORDER BY id DESC');
+        $stmt->execute([$sectionId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (\Throwable $e) {
+        return [];
+    }
+}
+
+function neuronetix_insert_section_note(int $sectionId, string $title, string $contentText, string $tags = '', ?int $userId = null): array
+{
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO || $sectionId <= 0) {
+        return ['ok' => false, 'message' => 'Brak polaczenia z baza lub bledna sekcja.'];
+    }
+
+    $title = trim($title);
+    $contentText = trim($contentText);
+    if ($title === '' || $contentText === '') {
+        return ['ok' => false, 'message' => 'Tytul i tresc notatki sa wymagane.'];
+    }
+
+    neuronetix_ensure_section_knowledge_table();
+
+    try {
+        $stmt = $pdo->prepare(
+            'INSERT INTO `neuronetix_section_knowledge`
+             (section_id, title, item_type, content_text, tags, created_by_user_id)
+             VALUES (?, ?, \'note\', ?, ?, ?)'
+        );
+        $stmt->execute([
+            $sectionId,
+            $title,
+            $contentText,
+            trim($tags),
+            $userId,
+        ]);
+        return ['ok' => true, 'id' => (int) $pdo->lastInsertId()];
+    } catch (\Throwable $e) {
+        return ['ok' => false, 'message' => 'Blad zapisu notatki: ' . $e->getMessage()];
+    }
+}
+
+function neuronetix_insert_section_file(
+    int $sectionId,
+    string $title,
+    string $relativeFilePath,
+    string $originalFileName,
+    string $mimeType,
+    int $fileSize,
+    string $tags = '',
+    ?int $userId = null
+): array {
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO || $sectionId <= 0) {
+        return ['ok' => false, 'message' => 'Brak polaczenia z baza lub bledna sekcja.'];
+    }
+
+    $title = trim($title);
+    if ($title === '') {
+        $title = trim($originalFileName) !== '' ? trim($originalFileName) : 'Plik';
+    }
+
+    neuronetix_ensure_section_knowledge_table();
+
+    try {
+        $stmt = $pdo->prepare(
+            'INSERT INTO `neuronetix_section_knowledge`
+             (section_id, title, item_type, file_path, file_name, mime_type, file_size, tags, created_by_user_id)
+             VALUES (?, ?, \'file\', ?, ?, ?, ?, ?, ?)'
+        );
+        $stmt->execute([
+            $sectionId,
+            $title,
+            $relativeFilePath,
+            $originalFileName,
+            $mimeType,
+            max(0, $fileSize),
+            trim($tags),
+            $userId,
+        ]);
+        return ['ok' => true, 'id' => (int) $pdo->lastInsertId()];
+    } catch (\Throwable $e) {
+        return ['ok' => false, 'message' => 'Blad zapisu pliku: ' . $e->getMessage()];
+    }
+}
+
+function neuronetix_delete_section_knowledge(int $itemId, int $sectionId): array
+{
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO || $itemId <= 0 || $sectionId <= 0) {
+        return ['ok' => false, 'message' => 'Nieprawidlowe dane rekordu.'];
+    }
+
+    try {
+        $find = $pdo->prepare('SELECT item_type, file_path FROM `neuronetix_section_knowledge` WHERE id = ? AND section_id = ? LIMIT 1');
+        $find->execute([$itemId, $sectionId]);
+        $row = $find->fetch(PDO::FETCH_ASSOC);
+        if (!is_array($row)) {
+            return ['ok' => false, 'message' => 'Nie znaleziono wpisu.'];
+        }
+
+        $stmt = $pdo->prepare('DELETE FROM `neuronetix_section_knowledge` WHERE id = ? AND section_id = ? LIMIT 1');
+        $stmt->execute([$itemId, $sectionId]);
+
+        if ((string) ($row['item_type'] ?? '') === 'file') {
+            $rel = trim((string) ($row['file_path'] ?? ''));
+            if ($rel !== '') {
+                $full = __DIR__ . '/../public/' . ltrim($rel, '/');
+                if (is_file($full)) {
+                    @unlink($full);
+                }
+            }
+        }
+
+        return ['ok' => true];
+    } catch (\Throwable $e) {
+        return ['ok' => false, 'message' => 'Blad usuwania wiedzy: ' . $e->getMessage()];
+    }
+}
+
 /**
  * Lightweight subjects list for sidebar nav (no ensure call, no heavy counting).
  */
@@ -1395,7 +1580,16 @@ function neuronetix_count_section_items(string $sourceType, string $sourceRef): 
             if ($sectionId > 0) {
                 $cntStmt = $pdo->prepare('SELECT COUNT(*) FROM `neuronetix_subject_tasks` WHERE section_id = ?');
                 $cntStmt->execute([$sectionId]);
-                return (int) ($cntStmt->fetchColumn() ?: 0);
+                $tasksCount = (int) ($cntStmt->fetchColumn() ?: 0);
+
+                $knowledgeCount = 0;
+                if (neuronetix_table_exists($pdo, 'neuronetix_section_knowledge')) {
+                    $kStmt = $pdo->prepare('SELECT COUNT(*) FROM `neuronetix_section_knowledge` WHERE section_id = ?');
+                    $kStmt->execute([$sectionId]);
+                    $knowledgeCount = (int) ($kStmt->fetchColumn() ?: 0);
+                }
+
+                return $tasksCount + $knowledgeCount;
             }
             return 0;
         }
