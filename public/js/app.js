@@ -75,4 +75,15 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         });
     }
+
+    // Expandable nav groups (Przedmioty sub-items)
+    document.querySelectorAll('.nx-nav-expand-btn').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var parent = btn.closest('.nx-nav-expandable');
+            if (parent) {
+                parent.classList.toggle('open');
+            }
+        });
+    });
 });

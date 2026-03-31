@@ -65,7 +65,7 @@ if (empty($subjectsOverview)) {
         $extraHtml .= '<td>' . neuronetix_sanitize($name) . '</td>';
         $extraHtml .= '<td>' . $secCnt . '</td>';
         $extraHtml .= '<td>' . $itCnt . '</td>';
-        $extraHtml .= '<td><a class="nx-btn nx-inline-link" href="/neuronetix/public/subjects.php?subject_id=' . $sid . '">Wejdz</a></td>';
+        $extraHtml .= '<td><a class="nx-btn nx-inline-link" href="/neuronetix/public/subject_view.php?id=' . $sid . '">Wejdz</a></td>';
         $extraHtml .= '</tr>';
     }
     $extraHtml .= '</tbody></table>';
