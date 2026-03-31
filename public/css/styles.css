@@ -258,6 +258,72 @@ a {
     background: rgba(45, 212, 191, 0.14);
 }
 
+/* ── Expandable nav (Przedmioty) ── */
+.nx-nav-expandable {
+    container-type: normal;
+}
+
+.nx-nav-expand-btn {
+    width: 100%;
+    text-align: left;
+    background: none;
+    font-size: 14px;
+}
+
+.nx-nav-expand-arrow {
+    margin-left: auto;
+    color: var(--muted);
+    font-size: 11px;
+    transition: transform 0.18s ease;
+    display: inline-block;
+}
+
+.nx-nav-expandable.open .nx-nav-expand-arrow {
+    transform: rotate(180deg);
+}
+
+.nx-nav-sub {
+    display: none;
+    padding: 4px 0 2px 6px;
+    margin-top: 2px;
+    border-left: 2px solid var(--line);
+    margin-left: 10px;
+}
+
+.nx-nav-expandable.open .nx-nav-sub {
+    display: grid;
+    gap: 2px;
+}
+
+.nx-nav-sub-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    text-decoration: none;
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.nx-nav-sub-link:hover {
+    border-color: var(--line);
+    background: rgba(56, 189, 248, 0.07);
+    color: var(--text);
+}
+
+.nx-nav-sub-link.active {
+    border-color: rgba(45, 212, 191, 0.4);
+    background: rgba(45, 212, 191, 0.1);
+    color: var(--text);
+}
+
+.nx-nav-sub-bullet {
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
 .nx-user-box {
     border: 1px solid var(--line);
     border-radius: 12px;
@@ -954,4 +1020,174 @@ a {
     font-size: 13px;
     color: #fca5a5;
     margin-bottom: 18px;
+
+/* ============================================================
+   SUBJECT VIEW PAGE
+   ============================================================ */
+.nx-subjectview {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 16px 12px 40px;
+    display: grid;
+    gap: 24px;
+}
+
+.nx-sv-hero {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 20px 22px;
+}
+
+.nx-sv-icon {
+    font-size: 36px;
+    flex-shrink: 0;
+    line-height: 1;
+    margin-top: 2px;
+}
+
+.nx-sv-meta {
+    flex: 1;
+}
+
+.nx-sv-title {
+    margin: 0 0 6px;
+    font-size: 22px;
+    font-weight: 700;
+}
+
+.nx-sv-desc {
+    margin: 0;
+    font-size: 14px;
+    color: var(--muted);
+    line-height: 1.5;
+}
+
+.nx-sv-back {
+    font-size: 12px;
+    color: var(--muted);
+    text-decoration: none;
+    padding: 6px 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.nx-sv-back:hover {
+    color: var(--text);
+    border-color: var(--accent2);
+}
+
+.nx-sv-sections-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0 0 14px;
+}
+
+.nx-sv-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+}
+
+.nx-sv-section-card {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--panel);
+    padding: 16px;
+    display: grid;
+    gap: 8px;
+    transition: border-color 0.15s ease;
+}
+
+.nx-sv-section-card:hover {
+    border-color: rgba(56, 189, 248, 0.4);
+}
+
+.nx-sv-section-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.nx-sv-section-name {
+    font-size: 14px;
+    font-weight: 600;
+    flex: 1;
+}
+
+.nx-sv-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 20px;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+}
+
+.nx-sv-badge--vocab {
+    background: rgba(45, 212, 191, 0.18);
+    color: var(--accent);
+    border: 1px solid rgba(45, 212, 191, 0.3);
+}
+
+.nx-sv-badge--tasks {
+    background: rgba(56, 189, 248, 0.15);
+    color: var(--accent2);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.nx-sv-badge--legacy {
+    background: rgba(251, 191, 36, 0.12);
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.25);
+}
+
+.nx-sv-section-desc {
+    margin: 0;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+}
+
+.nx-sv-section-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 4px;
+}
+
+.nx-sv-count {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.nx-sv-btn {
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    background: rgba(45, 212, 191, 0.1);
+    color: var(--accent);
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background 0.15s ease;
+}
+
+.nx-sv-btn:hover {
+    background: rgba(45, 212, 191, 0.22);
+}
+
+.nx-notice {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 13px;
+    color: var(--muted);
+}
 }
