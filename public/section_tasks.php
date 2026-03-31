@@ -31,6 +31,68 @@ $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = trim((string) ($_POST['action'] ?? ''));
 
+    if ($action === 'import_quiz_csv') {
+        if (!isset($_FILES['quiz_csv']) || !is_array($_FILES['quiz_csv'])) {
+            $error = 'Wybierz plik CSV z quizami.';
+        } else {
+            $file = $_FILES['quiz_csv'];
+            $tmpName = (string) ($file['tmp_name'] ?? '');
+            $origName = (string) ($file['name'] ?? '');
+            $ext = strtolower((string) pathinfo($origName, PATHINFO_EXTENSION));
+            if ($tmpName === '' || !is_uploaded_file($tmpName)) {
+                $error = 'Plik quizow nie zostal poprawnie przeslany.';
+            } elseif ($ext !== 'csv') {
+                $error = 'Import quizow obsluguje na razie tylko CSV.';
+            } else {
+                $fp = @fopen($tmpName, 'r');
+                if ($fp === false) {
+                    $error = 'Nie udalo sie odczytac pliku CSV.';
+                } else {
+                    $inserted = 0;
+                    $skipped = 0;
+                    $line = 0;
+                    while (($row = fgetcsv($fp, 0, ',')) !== false) {
+                        $line++;
+                        if ($line === 1) {
+                            $head = strtolower(trim((string) ($row[0] ?? '')));
+                            if (in_array($head, ['question', 'question_text', 'pytanie', 'tresc'], true)) {
+                                continue;
+                            }
+                        }
+
+                        $question = trim((string) ($row[0] ?? ''));
+                        $a = trim((string) ($row[1] ?? ''));
+                        $b = trim((string) ($row[2] ?? ''));
+                        $c = trim((string) ($row[3] ?? ''));
+                        $d = trim((string) ($row[4] ?? ''));
+                        $correct = strtoupper(trim((string) ($row[5] ?? '')));
+                        $difficulty = (int) ($row[6] ?? 1);
+                        $tags = trim((string) ($row[7] ?? 'import,csv'));
+
+                        if ($question === '' || $a === '' || $b === '' || $c === '' || $d === '' || !in_array($correct, ['A','B','C','D'], true)) {
+                            $skipped++;
+                            continue;
+                        }
+
+                        $res = neuronetix_insert_subject_task($sectionId, $question, $a, $b, $c, $d, $correct, $difficulty, $tags);
+                        if ($res['ok'] ?? false) {
+                            $inserted++;
+                        } else {
+                            $skipped++;
+                        }
+                    }
+                    fclose($fp);
+
+                    if ($inserted > 0) {
+                        $notice = 'Zaimportowano quizy CSV: ' . $inserted . ' | pominieto: ' . $skipped . '.';
+                    } else {
+                        $error = 'Nie zaimportowano quizow. Sprawdz format CSV.';
+                    }
+                }
+            }
+        }
+    }
+
     if ($action === 'add_task') {
         $res = neuronetix_insert_subject_task(
             $sectionId,
@@ -211,6 +273,17 @@ ob_start();
     <div class="nx-sh-grid">
         <section class="nx-sh-card">
             <h3>Zadania zamkniete (A/B/C/D)</h3>
+
+            <form method="post" enctype="multipart/form-data" class="nx-sh-form">
+                <input type="hidden" name="action" value="import_quiz_csv">
+                <input type="hidden" name="section_id" value="<?php echo $sectionId; ?>">
+                <div class="nx-sh-two">
+                    <input class="nx-file" type="file" name="quiz_csv" accept=".csv" required>
+                    <button class="nx-btn" type="submit">Import quizow CSV</button>
+                </div>
+                <div class="nx-sh-meta">Format kolumn CSV: question, answer_a, answer_b, answer_c, answer_d, correct(A-D), difficulty(1-5), tags</div>
+            </form>
+
             <form method="post" class="nx-sh-form">
                 <input type="hidden" name="action" value="add_task">
                 <input type="hidden" name="section_id" value="<?php echo $sectionId; ?>">

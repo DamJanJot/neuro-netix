@@ -109,6 +109,7 @@ foreach ($navItems as $item) {
                                     $subjIcon = match ($subjSlug) {
                                         'english'   => '🇬🇧',
                                         'matematyka' => '📐',
+                                        'informatyka' => '💻',
                                         default      => '📄',
                                     };
                                     $subjActive = $currentSubjectId === $subjId;

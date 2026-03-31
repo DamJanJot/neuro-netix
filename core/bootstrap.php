@@ -999,6 +999,7 @@ function neuronetix_ensure_subject_knowledge_catalog(): void
         $stmtSub->execute(['english', 'Jezyk angielski', 'Codzienne slowka i mini-quizy A/B/C/D z adaptacyjnymi powtorkami.']);
         $stmtSub->execute(['legacy-excel', 'Excel i analityka (legacy)', 'Wczesniejszy material znaleziony w starej tabeli pytan.']);
         $stmtSub->execute(['matematyka', 'Matematyka', 'Zadania zamkniete (A/B/C/D) z matury podstawowej, podzielone na dzialy tematyczne.']);
+        $stmtSub->execute(['informatyka', 'Informatyka', 'Jezyki programowania, narzedzia developerskie i praktyczna baza wiedzy + quizy.']);
 
         $subIdStmt = $pdo->prepare('SELECT id FROM `neuronetix_subjects` WHERE slug = ? LIMIT 1');
         $subIdStmt->execute(['english']);
@@ -1009,6 +1010,9 @@ function neuronetix_ensure_subject_knowledge_catalog(): void
 
         $subIdStmt->execute(['matematyka']);
         $mathId = (int) ($subIdStmt->fetchColumn() ?: 0);
+
+        $subIdStmt->execute(['informatyka']);
+        $itId = (int) ($subIdStmt->fetchColumn() ?: 0);
 
         if ($englishId > 0) {
             $englishSections = [
@@ -1102,6 +1106,155 @@ function neuronetix_ensure_subject_knowledge_catalog(): void
                     $ms['slug'],
                     $ms['sort'],
                 ]);
+            }
+        }
+
+        if ($itId > 0) {
+            $itSections = [
+                ['slug' => 'it-php',        'name' => 'PHP',                  'desc' => 'Skrypty backendowe, OOP, formularze, sesje i API.',                                 'sort' => 10],
+                ['slug' => 'it-javascript', 'name' => 'JavaScript',           'desc' => 'DOM, eventy, fetch, async/await i logika frontendu.',                               'sort' => 20],
+                ['slug' => 'it-typescript', 'name' => 'TypeScript',           'desc' => 'Typowanie, interfejsy, generyki i bezpieczny kod JS.',                               'sort' => 30],
+                ['slug' => 'it-python',     'name' => 'Python',               'desc' => 'Podstawy i automatyzacja: skrypty, pliki, API i data.',                              'sort' => 40],
+                ['slug' => 'it-sql',        'name' => 'SQL i Postgres',       'desc' => 'SELECT, JOIN, GROUP BY, indeksy i praktyka w Postgres.',                             'sort' => 50],
+                ['slug' => 'it-react',      'name' => 'React',                'desc' => 'Komponenty, state, hooks, architektura UI.',                                         'sort' => 60],
+                ['slug' => 'it-laravel',    'name' => 'Laravel',              'desc' => 'MVC, migracje, Eloquent, routing i blade/API.',                                      'sort' => 70],
+                ['slug' => 'it-git',        'name' => 'Git i GitHub',         'desc' => 'Branching, commitowanie, pull requesty i praca zespolowa.',                           'sort' => 80],
+                ['slug' => 'it-docker',     'name' => 'Docker',               'desc' => 'Kontenery, Dockerfile, compose i lokalne srodowiska.',                               'sort' => 90],
+                ['slug' => 'it-pgadmin',    'name' => 'pgAdmin i administracja', 'desc' => 'Zarzadzanie bazami, backup, role, uprawnienia i monitoring.',                      'sort' => 100],
+                ['slug' => 'it-smart-client','name' => 'Smart Client i architektura klienta', 'desc' => 'Integracje klient-serwer, protokoly, API contracts i UX techniczne.',      'sort' => 110],
+                ['slug' => 'it-learning',   'name' => 'Nowe technologie do nauki', 'desc' => 'Sekcja na rzeczy, ktorych chcesz nauczyc sie od zera.',                            'sort' => 120],
+            ];
+
+            $stmtItSec = $pdo->prepare(
+                'INSERT INTO `neuronetix_subject_sections` (`subject_id`, `slug`, `name`, `description`, `source_type`, `source_ref`, `sort_order`)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `description` = VALUES(`description`), `source_type` = VALUES(`source_type`), `source_ref` = VALUES(`source_ref`), `sort_order` = VALUES(`sort_order`)'
+            );
+
+            foreach ($itSections as $is) {
+                $stmtItSec->execute([
+                    $itId,
+                    $is['slug'],
+                    $is['name'],
+                    $is['desc'],
+                    'subject_tasks',
+                    $is['slug'],
+                    $is['sort'],
+                ]);
+            }
+        }
+
+        neuronetix_ensure_it_starter_content();
+    } catch (\Throwable $e) {
+        return;
+    }
+}
+
+function neuronetix_ensure_it_starter_content(): void
+{
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO) {
+        return;
+    }
+
+    neuronetix_ensure_subject_tasks_table();
+    neuronetix_ensure_section_knowledge_table();
+
+    try {
+        $subStmt = $pdo->prepare('SELECT id FROM `neuronetix_subjects` WHERE slug = ? LIMIT 1');
+        $subStmt->execute(['informatyka']);
+        $itId = (int) ($subStmt->fetchColumn() ?: 0);
+        if ($itId <= 0) {
+            return;
+        }
+
+        $secStmt = $pdo->prepare('SELECT id, slug, name FROM `neuronetix_subject_sections` WHERE subject_id = ?');
+        $secStmt->execute([$itId]);
+        $rows = $secStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        if (empty($rows)) {
+            return;
+        }
+
+        $sectionBySlug = [];
+        foreach ($rows as $row) {
+            $sectionBySlug[(string) ($row['slug'] ?? '')] = [
+                'id' => (int) ($row['id'] ?? 0),
+                'name' => (string) ($row['name'] ?? ''),
+            ];
+        }
+
+        $starterNotes = [
+            'it-php' => "PHP: warto pilnowac walidacji wejscia, prepared statements i podzialu logiki od widoku.",
+            'it-javascript' => "JavaScript: cwicz event loop, async/await i prace z API przez fetch + obsluge bledow.",
+            'it-sql' => "SQL/Postgres: najpierw poprawny model danych, potem indeksy i dopiero optymalizacja zapytan.",
+            'it-react' => "React: trzymaj stan blisko komponentu, a wspolny stan wynos tylko gdy naprawde potrzebny.",
+            'it-git' => "Git/GitHub: male commity i czytelne opisy przyspieszaja code review i rollbacki.",
+            'it-docker' => "Docker: projekt uruchamiaj przez compose, trzymaj wersje obrazow i zmienne w .env.",
+        ];
+
+        $kCountStmt = $pdo->prepare('SELECT COUNT(*) FROM `neuronetix_section_knowledge` WHERE section_id = ?');
+        foreach ($starterNotes as $slug => $content) {
+            if (!isset($sectionBySlug[$slug])) {
+                continue;
+            }
+            $sectionId = (int) $sectionBySlug[$slug]['id'];
+            $kCountStmt->execute([$sectionId]);
+            $hasAny = (int) ($kCountStmt->fetchColumn() ?: 0);
+            if ($hasAny > 0) {
+                continue;
+            }
+
+            neuronetix_insert_section_note(
+                $sectionId,
+                'Starter wiedzy: ' . $sectionBySlug[$slug]['name'],
+                $content,
+                'starter,it'
+            );
+        }
+
+        $starterQuizzes = [
+            'it-php' => [
+                ['Ktory superglobal zawiera dane przeslane metoda POST?', '$_GET', '$_POST', '$_SESSION', '$_SERVER', 'B', 1, 'php,quiz,starter'],
+                ['Do czego sluzy prepare() w PDO?', 'Do wysylki maili', 'Do cachowania HTML', 'Do bezpiecznych zapytan SQL', 'Do generowania sesji', 'C', 2, 'php,sql,security'],
+            ],
+            'it-javascript' => [
+                ['Ktore slowo kluczowe czeka na wynik Promise?', 'yield', 'await', 'defer', 'return', 'B', 1, 'javascript,async'],
+                ['Ktora metoda dodaje nasluchiwacz zdarzen DOM?', 'querySelector', 'appendChild', 'addEventListener', 'setInterval', 'C', 1, 'javascript,dom'],
+            ],
+            'it-sql' => [
+                ['Ktore zapytanie laczy dane z dwoch tabel?', 'MERGE', 'GROUP BY', 'JOIN', 'UNION ALL', 'C', 1, 'sql,postgres'],
+                ['Ktora klauzula filtruje grupy po GROUP BY?', 'WHERE', 'HAVING', 'ORDER BY', 'LIMIT', 'B', 2, 'sql,postgres'],
+            ],
+            'it-git' => [
+                ['Ktore polecenie tworzy nowa galez i od razu na nia przechodzi?', 'git branch nowa', 'git checkout nowa', 'git checkout -b nowa', 'git merge nowa', 'C', 1, 'git,github'],
+                ['Pull Request na GitHubie sluzy glownie do:', 'kasowania repo', 'review i laczenia zmian', 'instalacji zaleznosci', 'backupu bazy', 'B', 1, 'git,github,workflow'],
+            ],
+        ];
+
+        $taskCountStmt = $pdo->prepare('SELECT COUNT(*) FROM `neuronetix_subject_tasks` WHERE section_id = ?');
+        foreach ($starterQuizzes as $slug => $items) {
+            if (!isset($sectionBySlug[$slug])) {
+                continue;
+            }
+            $sectionId = (int) $sectionBySlug[$slug]['id'];
+            $taskCountStmt->execute([$sectionId]);
+            $existing = (int) ($taskCountStmt->fetchColumn() ?: 0);
+            if ($existing > 0) {
+                continue;
+            }
+
+            foreach ($items as $q) {
+                neuronetix_insert_subject_task(
+                    $sectionId,
+                    (string) $q[0],
+                    (string) $q[1],
+                    (string) $q[2],
+                    (string) $q[3],
+                    (string) $q[4],
+                    (string) $q[5],
+                    (int) $q[6],
+                    (string) $q[7]
+                );
             }
         }
     } catch (\Throwable $e) {

@@ -44,6 +44,7 @@ foreach ($sections as $sec) {
 $sourceConfig = [
     'english'    => ['type' => 'planned_vocab', 'btn_label' => 'Ucz sie',    'btn_href_fn' => fn($sec) => '/neuronetix/public/english.php?section=' . urlencode((string)($sec['source_ref'] ?? ''))],
     'matematyka' => ['type' => 'subject_tasks', 'btn_label' => 'Otworz dzial', 'btn_href_fn' => fn($sec) => '/neuronetix/public/section_tasks.php?section_id=' . (int)($sec['id'] ?? 0)],
+    'informatyka' => ['type' => 'subject_tasks', 'btn_label' => 'Otworz dzial', 'btn_href_fn' => fn($sec) => '/neuronetix/public/section_tasks.php?section_id=' . (int)($sec['id'] ?? 0)],
     'default'    => ['type' => '',              'btn_label' => 'Przejdz',    'btn_href_fn' => null],
 ];
 $cfg = $sourceConfig[$subjectSlug] ?? $sourceConfig['default'];
@@ -51,6 +52,7 @@ $cfg = $sourceConfig[$subjectSlug] ?? $sourceConfig['default'];
 $subjectIcon = match ($subjectSlug) {
     'english'    => '🇬🇧',
     'matematyka' => '📐',
+    'informatyka' => '💻',
     'legacy-excel' => '📊',
     default      => '📚',
 };
@@ -83,6 +85,7 @@ ob_start();
                 <div class="nx-sv-stat"><span>Tryb</span><strong><?php echo neuronetix_sanitize(match ($subjectSlug) {
                     'english' => 'Powtorki SRS',
                     'matematyka' => 'Zadania maturalne',
+                    'informatyka' => 'Kod + narzedzia + quizy',
                     'legacy-excel' => 'Legacy quizy',
                     default => 'Katalog',
                 }); ?></strong></div>
