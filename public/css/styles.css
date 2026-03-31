@@ -664,3 +664,294 @@ a {
         grid-template-columns: 1fr;
     }
 }
+
+/* ============================================================
+   ONBOARDING
+   ============================================================ */
+.nx-onboarding {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 20px 12px 40px;
+}
+
+.nx-ob-header {
+    margin-bottom: 28px;
+}
+
+.nx-ob-steps {
+    display: flex;
+    align-items: center;
+    gap: 0;
+}
+
+.nx-ob-step {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    opacity: 0.4;
+}
+
+.nx-ob-step--active {
+    opacity: 1;
+}
+
+.nx-ob-step--done {
+    opacity: 0.7;
+}
+
+.nx-ob-step-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    display: grid;
+    place-items: center;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+.nx-ob-step--active .nx-ob-step-num {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #052230;
+}
+
+.nx-ob-step--done .nx-ob-step-num {
+    background: rgba(45, 212, 191, 0.2);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.nx-ob-step-label {
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.nx-ob-step--active .nx-ob-step-label {
+    color: var(--text);
+    font-weight: 600;
+}
+
+.nx-ob-step-connector {
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+    margin: 0 14px;
+    min-width: 30px;
+}
+
+.nx-ob-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 32px 28px;
+}
+
+.nx-ob-title {
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0 0 8px;
+}
+
+.nx-ob-subtitle {
+    color: var(--muted);
+    font-size: 14px;
+    margin: 0 0 28px;
+    line-height: 1.6;
+}
+
+.nx-ob-form {
+    display: grid;
+    gap: 24px;
+}
+
+.nx-ob-question {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px 20px;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.nx-ob-q-num {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 8px;
+}
+
+.nx-ob-q-text {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 14px;
+    line-height: 1.4;
+}
+
+.nx-ob-q-hint {
+    font-size: 13px;
+    color: var(--muted);
+    font-weight: 400;
+    margin-left: 6px;
+}
+
+.nx-ob-options {
+    display: grid;
+    gap: 8px;
+}
+
+.nx-ob-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.nx-ob-option:hover {
+    border-color: var(--accent2);
+    background: rgba(56, 189, 248, 0.07);
+}
+
+.nx-ob-option input[type="radio"] {
+    display: none;
+}
+
+.nx-ob-option:has(input:checked) {
+    border-color: var(--accent);
+    background: rgba(45, 212, 191, 0.1);
+}
+
+.nx-ob-opt-letter {
+    width: 24px;
+    height: 24px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    display: grid;
+    place-items: center;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+    color: var(--muted);
+    margin-top: 1px;
+}
+
+.nx-ob-option:has(input:checked) .nx-ob-opt-letter {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #052230;
+}
+
+.nx-ob-opt-text {
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.nx-ob-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin-top: 8px;
+}
+
+.nx-ob-actions--center {
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.nx-ob-btn {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--panel);
+    color: var(--text);
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.nx-ob-btn--primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #052230;
+}
+
+.nx-ob-btn--primary:hover {
+    background: #26bfaa;
+    border-color: #26bfaa;
+}
+
+.nx-ob-btn--ghost:hover {
+    border-color: var(--accent2);
+    background: rgba(56, 189, 248, 0.1);
+}
+
+.nx-ob-btn--lg {
+    padding: 14px 28px;
+    font-size: 15px;
+}
+
+/* ─── Result page ─── */
+.nx-ob-result-hero {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.nx-ob-result-emoji {
+    font-size: 52px;
+    margin-bottom: 12px;
+}
+
+.nx-ob-result-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 16px;
+    margin-bottom: 32px;
+}
+
+.nx-ob-result-block {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.nx-ob-result-block-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--muted);
+    margin-bottom: 6px;
+}
+
+.nx-ob-result-block-value {
+    font-size: 17px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--accent);
+}
+
+.nx-ob-result-block-desc {
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.5;
+}
+
+.nx-notice--error {
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 13px;
+    color: #fca5a5;
+    margin-bottom: 18px;
+}

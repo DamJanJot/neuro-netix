@@ -7,6 +7,10 @@ require_once __DIR__ . '/../core/bootstrap.php';
 
 neuronetix_ensure_panel_access('student');
 
+$user   = neuronetix_current_user();
+$userId = (int) ($user['id'] ?? 0);
+neuronetix_check_onboarding_redirect($userId);
+
 $pageTitle = 'Neuronetix - Panel ucznia';
 $pageHeading = 'Panel ucznia';
 $pageDescription = 'Startowy panel nauki z zadaniami, quizami i testami.';
