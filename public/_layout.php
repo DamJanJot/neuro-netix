@@ -12,6 +12,10 @@ declare(strict_types=1);
 $user = neuronetix_current_user();
 $navItems = neuronetix_visible_nav();
 $appSwitchItems = neuronetix_app_switcher_items();
+$subjectNavItems = neuronetix_fetch_subjects_for_nav();
+if (!isset($currentSubjectId)) {
+    $currentSubjectId = 0;
+}
 $role = (string) ($user['rola'] ?? 'user');
 $fullName = trim((string) ($user['imie'] ?? '') . ' ' . (string) ($user['nazwisko'] ?? ''));
 if ($fullName === '') {
@@ -80,13 +84,49 @@ foreach ($navItems as $item) {
                     <h3><?php echo neuronetix_sanitize($groupLabels[$groupKey] ?? 'Sekcja'); ?></h3>
                     <?php foreach ($items as $item): ?>
                         <?php
-                        $isActive = ((string) ($item['key'] ?? '')) === $panelKey;
+                        $itemKey = (string) ($item['key'] ?? '');
+                        $isActive = $itemKey === $panelKey;
                         $url = (string) ($item['url'] ?? '#');
                         ?>
+                        <?php if ($itemKey === 'subjects'): ?>
+                        <div class="nx-nav-expandable <?php echo $isActive ? 'open' : ''; ?>">
+                            <button class="nx-nav-link nx-nav-expand-btn <?php echo $isActive ? 'active' : ''; ?>" type="button">
+                                <span><?php echo neuronetix_sanitize((string) ($item['icon'] ?? '📚')); ?></span>
+                                <span><?php echo neuronetix_sanitize((string) ($item['label'] ?? 'Przedmioty')); ?></span>
+                                <span class="nx-nav-expand-arrow">▾</span>
+                            </button>
+                            <div class="nx-nav-sub">
+                                <a class="nx-nav-sub-link <?php echo ($isActive && $currentSubjectId === 0) ? 'active' : ''; ?>"
+                                   href="<?php echo neuronetix_sanitize($url); ?>">
+                                    <span class="nx-nav-sub-bullet">·</span>
+                                    <span>Wszystkie</span>
+                                </a>
+                                <?php foreach ($subjectNavItems as $subj): ?>
+                                    <?php
+                                    $subjId   = (int) ($subj['id'] ?? 0);
+                                    $subjName = (string) ($subj['name'] ?? 'Przedmiot');
+                                    $subjSlug = (string) ($subj['slug'] ?? '');
+                                    $subjIcon = match ($subjSlug) {
+                                        'english'   => '🇬🇧',
+                                        'matematyka' => '📐',
+                                        default      => '📄',
+                                    };
+                                    $subjActive = $currentSubjectId === $subjId;
+                                    ?>
+                                    <a class="nx-nav-sub-link <?php echo $subjActive ? 'active' : ''; ?>"
+                                       href="/neuronetix/public/subject_view.php?id=<?php echo $subjId; ?>">
+                                        <span class="nx-nav-sub-bullet"><?php echo $subjIcon; ?></span>
+                                        <span><?php echo neuronetix_sanitize($subjName); ?></span>
+                                    </a>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                        <?php else: ?>
                         <a class="nx-nav-link <?php echo $isActive ? 'active' : ''; ?>" href="<?php echo neuronetix_sanitize($url); ?>">
                             <span><?php echo neuronetix_sanitize((string) ($item['icon'] ?? '•')); ?></span>
                             <span><?php echo neuronetix_sanitize((string) ($item['label'] ?? 'Panel')); ?></span>
                         </a>
+                        <?php endif; ?>
                     <?php endforeach; ?>
                 </section>
             <?php endforeach; ?>

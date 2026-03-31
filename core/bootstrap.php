@@ -998,6 +998,7 @@ function neuronetix_ensure_subject_knowledge_catalog(): void
         );
         $stmtSub->execute(['english', 'Jezyk angielski', 'Codzienne slowka i mini-quizy A/B/C/D z adaptacyjnymi powtorkami.']);
         $stmtSub->execute(['legacy-excel', 'Excel i analityka (legacy)', 'Wczesniejszy material znaleziony w starej tabeli pytan.']);
+        $stmtSub->execute(['matematyka', 'Matematyka', 'Zadania zamkniete (A/B/C/D) z matury podstawowej, podzielone na dzialy tematyczne.']);
 
         $subIdStmt = $pdo->prepare('SELECT id FROM `neuronetix_subjects` WHERE slug = ? LIMIT 1');
         $subIdStmt->execute(['english']);
@@ -1005,6 +1006,9 @@ function neuronetix_ensure_subject_knowledge_catalog(): void
 
         $subIdStmt->execute(['legacy-excel']);
         $legacyId = (int) ($subIdStmt->fetchColumn() ?: 0);
+
+        $subIdStmt->execute(['matematyka']);
+        $mathId = (int) ($subIdStmt->fetchColumn() ?: 0);
 
         if ($englishId > 0) {
             $englishSections = [
@@ -1067,8 +1071,209 @@ function neuronetix_ensure_subject_knowledge_catalog(): void
                 $sort += 10;
             }
         }
+
+        if ($mathId > 0) {
+            $mathSections = [
+                ['slug' => 'matura-pst-liczby',  'name' => 'Liczby rzeczywiste',                  'desc' => 'Dzialania na liczbach, przedzialy, wartosci bezwzgledne, pierwiastki.',         'sort' => 10],
+                ['slug' => 'matura-pst-algebra',  'name' => 'Wyrazenia algebraiczne',             'desc' => 'Upraszczanie wyrazen, wzory skroconego mnozenia, wielomiany.',                  'sort' => 20],
+                ['slug' => 'matura-pst-rownan',   'name' => 'Rownania i nierownosci',             'desc' => 'Rownania liniowe, kwadratowe, uklady rownan, nierownosci.',                     'sort' => 30],
+                ['slug' => 'matura-pst-funkcje',  'name' => 'Funkcje',                            'desc' => 'Dziedzina, zbior wartosci, wlasnosci, wykresy funkcji liniowej i kwadratowej.', 'sort' => 40],
+                ['slug' => 'matura-pst-geom2d',   'name' => 'Geometria plaska',                   'desc' => 'Trojkaty, czworoboki, okrag, pola i obwody.',                                   'sort' => 50],
+                ['slug' => 'matura-pst-trygon',   'name' => 'Trygonometria',                      'desc' => 'Funkcje trygonometryczne, twierdzenie sinusow i cosinusow.',                    'sort' => 60],
+                ['slug' => 'matura-pst-geom3d',   'name' => 'Geometria przestrzenna',             'desc' => 'Graniastoslupy, walce, stoki, kule — objetosci i pola.',                        'sort' => 70],
+                ['slug' => 'matura-pst-ciagi',    'name' => 'Ciagi liczbowe',                     'desc' => 'Ciag arytmetyczny, geometryczny, wzory i sumy czesciowe.',                      'sort' => 80],
+                ['slug' => 'matura-pst-kombin',   'name' => 'Kombinatoryka i prawdopodobienstwo', 'desc' => 'Permutacje, kombinacje, wariacje, klasyczna definicja prawdopodobienstwa.',     'sort' => 90],
+                ['slug' => 'matura-pst-stat',     'name' => 'Statystyka opisowa',                 'desc' => 'Srednia arytmetyczna, mediana, dominanta, odchylenie standardowe.',             'sort' => 100],
+            ];
+
+            $stmtMathSec = $pdo->prepare(
+                'INSERT INTO `neuronetix_subject_sections` (`subject_id`, `slug`, `name`, `description`, `source_type`, `source_ref`, `sort_order`)
+                 VALUES (?, ?, ?, ?, ?, ?, ?)
+                 ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `description` = VALUES(`description`), `source_type` = VALUES(`source_type`), `source_ref` = VALUES(`source_ref`), `sort_order` = VALUES(`sort_order`)'
+            );
+
+            foreach ($mathSections as $ms) {
+                $stmtMathSec->execute([
+                    $mathId,
+                    $ms['slug'],
+                    $ms['name'],
+                    $ms['desc'],
+                    'subject_tasks',
+                    $ms['slug'],
+                    $ms['sort'],
+                ]);
+            }
+        }
     } catch (\Throwable $e) {
         return;
+    }
+}
+
+/**
+ * Ensure the neuronetix_subject_tasks table exists (closed A/B/C/D questions per section).
+ */
+function neuronetix_ensure_subject_tasks_table(): void
+{
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO) {
+        return;
+    }
+    try {
+        $pdo->exec(
+            'CREATE TABLE IF NOT EXISTS `neuronetix_subject_tasks` (
+                `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                `section_id` INT UNSIGNED NOT NULL,
+                `question_text` TEXT NOT NULL,
+                `answer_a` VARCHAR(500) NOT NULL DEFAULT \'\',
+                `answer_b` VARCHAR(500) NOT NULL DEFAULT \'\',
+                `answer_c` VARCHAR(500) NOT NULL DEFAULT \'\',
+                `answer_d` VARCHAR(500) NOT NULL DEFAULT \'\',
+                `correct_answer` ENUM(\'A\',\'B\',\'C\',\'D\') NOT NULL,
+                `difficulty` TINYINT UNSIGNED NOT NULL DEFAULT 1,
+                `tags` VARCHAR(255) NULL,
+                `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                PRIMARY KEY (`id`),
+                KEY `idx_section` (`section_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+        );
+    } catch (\Throwable $e) {
+        // ignore
+    }
+}
+
+function neuronetix_fetch_section_tasks(int $sectionId): array
+{
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO || $sectionId <= 0) {
+        return [];
+    }
+    neuronetix_ensure_subject_tasks_table();
+    try {
+        $stmt = $pdo->prepare('SELECT * FROM `neuronetix_subject_tasks` WHERE section_id = ? ORDER BY id ASC');
+        $stmt->execute([$sectionId]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (\Throwable $e) {
+        return [];
+    }
+}
+
+function neuronetix_insert_subject_task(
+    int    $sectionId,
+    string $questionText,
+    string $answerA,
+    string $answerB,
+    string $answerC,
+    string $answerD,
+    string $correctAnswer,
+    int    $difficulty = 1,
+    string $tags = ''
+): array {
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO) {
+        return ['ok' => false, 'message' => 'Brak polaczenia z baza.'];
+    }
+    $correctAnswer = strtoupper(trim($correctAnswer));
+    if (!in_array($correctAnswer, ['A','B','C','D'], true)) {
+        return ['ok' => false, 'message' => 'Nieprawidlowa odpowiedz.'];
+    }
+    neuronetix_ensure_subject_tasks_table();
+    try {
+        $stmt = $pdo->prepare(
+            'INSERT INTO `neuronetix_subject_tasks`
+             (section_id, question_text, answer_a, answer_b, answer_c, answer_d, correct_answer, difficulty, tags)
+             VALUES (?,?,?,?,?,?,?,?,?)'
+        );
+        $stmt->execute([
+            $sectionId,
+            trim($questionText),
+            trim($answerA),
+            trim($answerB),
+            trim($answerC),
+            trim($answerD),
+            $correctAnswer,
+            max(1, min(5, $difficulty)),
+            trim($tags),
+        ]);
+        return ['ok' => true, 'id' => (int) $pdo->lastInsertId()];
+    } catch (\Throwable $e) {
+        return ['ok' => false, 'message' => 'Blad zapisu: ' . $e->getMessage()];
+    }
+}
+
+function neuronetix_update_subject_task(
+    int    $taskId,
+    string $questionText,
+    string $answerA,
+    string $answerB,
+    string $answerC,
+    string $answerD,
+    string $correctAnswer,
+    int    $difficulty = 1,
+    string $tags = ''
+): array {
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO) {
+        return ['ok' => false, 'message' => 'Brak polaczenia z baza.'];
+    }
+    $correctAnswer = strtoupper(trim($correctAnswer));
+    if (!in_array($correctAnswer, ['A','B','C','D'], true)) {
+        return ['ok' => false, 'message' => 'Nieprawidlowa odpowiedz.'];
+    }
+    try {
+        $stmt = $pdo->prepare(
+            'UPDATE `neuronetix_subject_tasks`
+             SET question_text=?, answer_a=?, answer_b=?, answer_c=?, answer_d=?, correct_answer=?, difficulty=?, tags=?, updated_at=NOW()
+             WHERE id=? LIMIT 1'
+        );
+        $stmt->execute([
+            trim($questionText),
+            trim($answerA),
+            trim($answerB),
+            trim($answerC),
+            trim($answerD),
+            $correctAnswer,
+            max(1, min(5, $difficulty)),
+            trim($tags),
+            max(1, $taskId),
+        ]);
+        return ['ok' => true];
+    } catch (\Throwable $e) {
+        return ['ok' => false, 'message' => 'Blad aktualizacji: ' . $e->getMessage()];
+    }
+}
+
+function neuronetix_delete_subject_task(int $taskId): array
+{
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO || $taskId <= 0) {
+        return ['ok' => false, 'message' => 'Brak polaczenia lub nieprawidlowe ID.'];
+    }
+    try {
+        $pdo->prepare('DELETE FROM `neuronetix_subject_tasks` WHERE id = ? LIMIT 1')->execute([$taskId]);
+        return ['ok' => true];
+    } catch (\Throwable $e) {
+        return ['ok' => false, 'message' => 'Blad usuwania: ' . $e->getMessage()];
+    }
+}
+
+/**
+ * Lightweight subjects list for sidebar nav (no ensure call, no heavy counting).
+ */
+function neuronetix_fetch_subjects_for_nav(): array
+{
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO) {
+        return [];
+    }
+    try {
+        if (!neuronetix_table_exists($pdo, 'neuronetix_subjects')) {
+            return [];
+        }
+        return $pdo->query('SELECT id, slug, name FROM `neuronetix_subjects` WHERE is_active = 1 ORDER BY name ASC')
+            ->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (\Throwable $e) {
+        return [];
     }
 }
 
@@ -1179,6 +1384,18 @@ function neuronetix_count_section_items(string $sourceType, string $sourceRef): 
                     $cntStmt->execute([$setId]);
                     return (int) ($cntStmt->fetchColumn() ?: 0);
                 }
+            }
+            return 0;
+        }
+
+        if ($sourceType === 'subject_tasks' && $sourceRef !== '' && neuronetix_table_exists($pdo, 'neuronetix_subject_tasks')) {
+            $secStmt = $pdo->prepare('SELECT id FROM `neuronetix_subject_sections` WHERE slug = ? LIMIT 1');
+            $secStmt->execute([$sourceRef]);
+            $sectionId = (int) ($secStmt->fetchColumn() ?: 0);
+            if ($sectionId > 0) {
+                $cntStmt = $pdo->prepare('SELECT COUNT(*) FROM `neuronetix_subject_tasks` WHERE section_id = ?');
+                $cntStmt->execute([$sectionId]);
+                return (int) ($cntStmt->fetchColumn() ?: 0);
             }
             return 0;
         }
