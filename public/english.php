@@ -8,8 +8,9 @@ require_once __DIR__ . '/../core/bootstrap.php';
 // Re-use subjects access to keep compatibility with existing role/panel assignments.
 neuronetix_ensure_panel_access('subjects');
 
-$user = neuronetix_current_user();
+$user   = neuronetix_current_user();
 $userId = (int) ($user['id'] ?? 0);
+neuronetix_check_onboarding_redirect($userId);
 $sectionSlug = trim((string) ($_GET['section'] ?? ''));
 if ($sectionSlug === '') {
     $sectionSlug = null;

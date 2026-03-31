@@ -1619,6 +1619,260 @@ function neuronetix_delete_quiz_question(int $questionId, int $quizId): array
     }
 }
 
+// ============================================================
+// ONBOARDING / USER PROFILE
+// ============================================================
+
+/**
+ * Check if user has completed the onboarding questionnaire.
+ */
+function neuronetix_has_completed_onboarding(int $userId): bool
+{
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO || $userId <= 0) {
+        return true; // fail-safe: don't redirect in loop
+    }
+    $stmt = $pdo->prepare('SELECT 1 FROM user_profile WHERE user_id = ? LIMIT 1');
+    $stmt->execute([$userId]);
+    return (bool) $stmt->fetchColumn();
+}
+
+/**
+ * Save completed onboarding data to user_profile and user_personas.
+ */
+function neuronetix_save_onboarding(
+    int    $userId,
+    string $learningStyle,
+    string $persona,
+    array  $preferences,
+    string $recommendedSection
+): void {
+    $pdo = neuronetix_get_pdo();
+    if (!$pdo instanceof PDO || $userId <= 0) {
+        return;
+    }
+
+    $allowedStyles   = ['wizualny', 'sluchowy', 'kinestetyczny', 'mieszany'];
+    $allowedPersonas = ['Odkrywca', 'Przewodnik', 'Kurator', 'Sensei'];
+
+    if (!in_array($learningStyle, $allowedStyles, true)) {
+        $learningStyle = 'mieszany';
+    }
+    if (!in_array($persona, $allowedPersonas, true)) {
+        $persona = 'Odkrywca';
+    }
+
+    $prefsJson = json_encode(array_merge($preferences, [
+        'recommended_section' => $recommendedSection,
+        'onboarding_at'       => date('Y-m-d H:i:s'),
+    ]), JSON_UNESCAPED_UNICODE);
+
+    $pdo->prepare(
+        'INSERT INTO user_profile (user_id, learning_style, preferences, updated_at)
+         VALUES (?, ?, ?, NOW())
+         ON DUPLICATE KEY UPDATE learning_style = VALUES(learning_style), preferences = VALUES(preferences), updated_at = NOW()'
+    )->execute([$userId, $learningStyle, $prefsJson]);
+
+    $pdo->prepare(
+        'INSERT INTO user_personas (user_id, persona)
+         VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE persona = VALUES(persona)'
+    )->execute([$userId, $persona]);
+}
+
+/**
+ * Hardcoded placement test: 10 EN→PL questions spanning A1..B1 difficulty.
+ * Returns array of ['prompt','correct','options'[4]] in fixed order.
+ */
+function neuronetix_get_placement_test_questions(): array
+{
+    return [
+        // A1 — very basic
+        ['id' => 1, 'prompt' => 'hello',       'correct' => 'czesc',                 'options' => ['czesc', 'dobranoc', 'przepraszam', 'dziekuje']],
+        ['id' => 2, 'prompt' => 'cat',         'correct' => 'kot',                   'options' => ['pies', 'kot', 'ptak', 'ryba']],
+        ['id' => 3, 'prompt' => 'water',       'correct' => 'woda',                  'options' => ['herbata', 'sok', 'mleko', 'woda']],
+        ['id' => 4, 'prompt' => 'house',       'correct' => 'dom',                   'options' => ['ogrod', 'mieszkanie', 'dom', 'garaz']],
+        // A2 — elementary
+        ['id' => 5, 'prompt' => 'breakfast',   'correct' => 'sniadanie',             'options' => ['obiad', 'kolacja', 'sniadanie', 'podwieczorek']],
+        ['id' => 6, 'prompt' => 'airport',     'correct' => 'lotnisko',              'options' => ['dworzec', 'port', 'lotnisko', 'przystanek']],
+        ['id' => 7, 'prompt' => 'neighbour',   'correct' => 'sasiad',                'options' => ['przyjaciel', 'szef', 'klient', 'sasiad']],
+        // B1 — intermediate
+        ['id' => 8, 'prompt' => 'colleague',   'correct' => 'kolega z pracy',        'options' => ['znajomy', 'szef', 'kolega z pracy', 'pracownik']],
+        ['id' => 9, 'prompt' => 'deadline',    'correct' => 'termin',                'options' => ['termin', 'projekt', 'obowiazek', 'zadanie']],
+        ['id' => 10,'prompt' => 'spreadsheet', 'correct' => 'arkusz kalkulacyjny',   'options' => ['prezentacja', 'baza danych', 'arkusz kalkulacyjny', 'dokument']],
+    ];
+}
+
+/**
+ * Map placement test score (0-10) to recommended starting section slug.
+ */
+function neuronetix_score_to_section(int $score): string
+{
+    if ($score <= 3) {
+        return 'a1-basics';
+    }
+    if ($score <= 6) {
+        return 'dom-i-rodzina';
+    }
+    if ($score <= 8) {
+        return 'szkola-i-praca';
+    }
+    return 'technologia';
+}
+
+/**
+ * Score label for placement result display.
+ */
+function neuronetix_placement_level_label(string $section): string
+{
+    return match ($section) {
+        'a1-basics'      => 'Poziom A1 – Podstawy',
+        'dom-i-rodzina'  => 'Poziom A2 – Elementarny',
+        'szkola-i-praca' => 'Poziom B1 – Sredniozaawansowany',
+        'technologia'    => 'Poziom B2 – Zaawansowany',
+        default          => 'Poziom A1 – Podstawy',
+    };
+}
+
+/**
+ * Personality question bank with persona+style weights.
+ * Each answer: [persona_key, style_key]
+ * persona_keys: O=Odkrywca, P=Przewodnik, K=Kurator, S=Sensei
+ * style_keys: w=wizualny, s=sluchowy, k=kinestetyczny, m=mieszany
+ */
+function neuronetix_get_personality_questions(): array
+{
+    return [
+        [
+            'q'  => 'Jak najchętniej zapamiętujesz nowe słowa?',
+            'answers' => [
+                'A' => ['text' => 'Wyobrażam sobie obrazy i skojarzenia mentalne',     'persona' => 'O', 'style' => 'w'],
+                'B' => ['text' => 'Powtarzam je głośno kilka razy',                    'persona' => 'K', 'style' => 's'],
+                'C' => ['text' => 'Od razu używam ich w zdaniach lub rozmowie',        'persona' => 'S', 'style' => 'k'],
+                'D' => ['text' => 'Zapisuję i tworzę fiszki do przeglądania',          'persona' => 'K', 'style' => 'w'],
+            ],
+        ],
+        [
+            'q'  => 'Gdy zaczynasz uczyć się nowej rzeczy, co robisz jako pierwsze?',
+            'answers' => [
+                'A' => ['text' => 'Szukam jak najwięcej informacji i kontekstu',        'persona' => 'O', 'style' => 'w'],
+                'B' => ['text' => 'Pytam kogoś lub szukam przykładów od innych',        'persona' => 'P', 'style' => 's'],
+                'C' => ['text' => 'Po prostu zaczynam ćwiczyć i uczę się przez błędy', 'persona' => 'S', 'style' => 'k'],
+                'D' => ['text' => 'Planuję materiał i układam go w logiczny system',    'persona' => 'K', 'style' => 'w'],
+            ],
+        ],
+        [
+            'q'  => 'Które zdanie najlepiej Cię opisuje?',
+            'answers' => [
+                'A' => ['text' => 'Lubię odkrywać nowe tematy i dać się zaskoczyć',    'persona' => 'O', 'style' => 'm'],
+                'B' => ['text' => 'Cenię porządek, systematyczne podejście i plany',   'persona' => 'K', 'style' => 'm'],
+                'C' => ['text' => 'Największą frajdę daje mi praktyczne działanie',    'persona' => 'S', 'style' => 'k'],
+                'D' => ['text' => 'Lubię pomagać innym i dzielić się wiedzą',          'persona' => 'P', 'style' => 'm'],
+            ],
+        ],
+        [
+            'q'  => 'Kiedy uczysz się najefektywniej?',
+            'answers' => [
+                'A' => ['text' => 'Oglądając prezentacje, obrazki lub schematy',        'persona' => 'K', 'style' => 'w'],
+                'B' => ['text' => 'Słuchając wyjaśnień, podcastów lub głosowych powtórek','persona' => 'O','style' => 's'],
+                'C' => ['text' => 'Pisząc, rysując lub wykonując ćwiczenia ręcznie',   'persona' => 'S', 'style' => 'k'],
+                'D' => ['text' => 'Różnie – zależy od nastroju i tematu',              'persona' => 'P', 'style' => 'm'],
+            ],
+        ],
+        [
+            'q'  => 'Jak reagujesz na popełniony błąd?',
+            'answers' => [
+                'A' => ['text' => 'Analizuję wzorzec – szukam przyczyny i wzorca',     'persona' => 'K', 'style' => 'w'],
+                'B' => ['text' => 'Traktuję go jako naturalną część uczenia się',      'persona' => 'O', 'style' => 'm'],
+                'C' => ['text' => 'Pytam o wyjaśnienie, chcę zrozumieć dokładnie',     'persona' => 'P', 'style' => 's'],
+                'D' => ['text' => 'Powtarzam ćwiczenie do skutku – raz za razem',      'persona' => 'S', 'style' => 'k'],
+            ],
+        ],
+        [
+            'q'  => 'Co najbardziej motywuje Cię do nauki?',
+            'answers' => [
+                'A' => ['text' => 'Ciekawość i radość odkrywania nieznanych rzeczy',   'persona' => 'O', 'style' => 'm'],
+                'B' => ['text' => 'Chęć bycia ekspertem i mistrzem w danej dziedzinie','persona' => 'S', 'style' => 'm'],
+                'C' => ['text' => 'Możliwość dzielenia się wiedzą z innymi',           'persona' => 'P', 'style' => 's'],
+                'D' => ['text' => 'Satysfakcja gdy wszystko jest poukładane i pod kontrolą','persona' => 'K','style' => 'w'],
+            ],
+        ],
+    ];
+}
+
+/**
+ * Calculate persona and learning_style from submitted personality answers.
+ * $answers = ['q0'=>'A', 'q1'=>'C', ...]
+ * Returns ['persona'=>'Odkrywca', 'learning_style'=>'wizualny']
+ */
+function neuronetix_calculate_persona(array $answers): array
+{
+    $questions = neuronetix_get_personality_questions();
+
+    $personaMap = ['O' => 'Odkrywca', 'P' => 'Przewodnik', 'K' => 'Kurator', 'S' => 'Sensei'];
+    $styleMap   = ['w' => 'wizualny',  's' => 'sluchowy',   'k' => 'kinestetyczny', 'm' => 'mieszany'];
+
+    $personaScore = ['O' => 0, 'P' => 0, 'K' => 0, 'S' => 0];
+    $styleScore   = ['w' => 0, 's' => 0, 'k' => 0, 'm' => 0];
+
+    foreach ($questions as $i => $q) {
+        $key = 'q' . $i;
+        $chosen = strtoupper(trim((string) ($answers[$key] ?? '')));
+        if (!isset($q['answers'][$chosen])) {
+            continue;
+        }
+        $ans = $q['answers'][$chosen];
+        $personaScore[$ans['persona']] += 1;
+        $styleScore[$ans['style']]     += 1;
+    }
+
+    arsort($personaScore);
+    arsort($styleScore);
+
+    $topPersonaKey = (string) array_key_first($personaScore);
+    $topStyleKey   = (string) array_key_first($styleScore);
+
+    // If style is heavily 'm' (mieszany) but another style is close, prefer specific
+    if ($topStyleKey === 'm') {
+        $styleScore['m'] = 0;
+        arsort($styleScore);
+        $alt = (string) array_key_first($styleScore);
+        if ($styleScore[$alt] > 0) {
+            $topStyleKey = $alt;
+        }
+    }
+
+    return [
+        'persona'        => $personaMap[$topPersonaKey] ?? 'Odkrywca',
+        'learning_style' => $styleMap[$topStyleKey]   ?? 'mieszany',
+    ];
+}
+
+/**
+ * If the current logged-in user (student role) has not done onboarding,
+ * redirect to onboarding.php. Call this at the top of student-facing pages.
+ */
+function neuronetix_check_onboarding_redirect(int $userId): void
+{
+    if ($userId <= 0) {
+        return;
+    }
+    $user = neuronetix_current_user();
+    $role = neuronetix_normalize_role((string) ($user['rola'] ?? 'user'));
+    // Only redirect students/users – admins and teachers skip onboarding
+    if (in_array($role, ['admin', 'owner', 'administrator', 'nauczyciel', 'teacher'], true)) {
+        return;
+    }
+    if (!neuronetix_has_completed_onboarding($userId)) {
+        header('Location: /neuronetix/public/onboarding.php');
+        exit();
+    }
+}
+
+// ============================================================
+// END ONBOARDING
+// ============================================================
+
 /**
  * Sanitize input
  */
