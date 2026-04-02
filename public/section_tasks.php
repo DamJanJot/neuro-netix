@@ -260,6 +260,7 @@ ob_start();
         </p>
         <div class="nx-sh-links">
             <a class="nx-sh-link" href="/neuronetix/public/subject_view.php?id=<?php echo (int) ($section['subject_id'] ?? 0); ?>">← Wroc do przedmiotu</a>
+            <a class="nx-sh-link nx-sh-link--board" href="/paint/projects.php" target="_blank" rel="noopener" title="Otwórz tablicę do rozwiązywania zadań">🖊 Tablica</a>
         </div>
     </section>
 

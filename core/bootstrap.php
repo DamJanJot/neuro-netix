@@ -288,6 +288,7 @@ function neuronetix_app_switcher_items(): array
         'taski' => ['label' => 'Taski', 'url' => 'https://taski.j.pl', 'icon' => '✅'],
         'taskora' => ['label' => 'Taskora', 'url' => 'https://taskora.code-dj.pl', 'icon' => '📋'],
         'neuronetix' => ['label' => 'Neuronetix', 'url' => '/neuronetix/public/dashboard.php', 'icon' => '🧠'],
+        'paint' => ['label' => 'Tablica', 'url' => '/paint/projects.php', 'icon' => '🖊'],
     ];
 
     $sessionApps = (array) ($_SESSION['access']['apps'] ?? []);
@@ -301,6 +302,10 @@ function neuronetix_app_switcher_items(): array
 
     if (!isset($items['neuronetix'])) {
         $items['neuronetix'] = $catalog['neuronetix'];
+    }
+
+    if (!isset($items['paint'])) {
+        $items['paint'] = $catalog['paint'];
     }
 
     return $items;

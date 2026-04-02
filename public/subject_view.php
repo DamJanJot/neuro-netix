@@ -149,6 +149,7 @@ ob_start();
                             <?php echo neuronetix_sanitize($btnLabel); ?> →
                         </a>
                     <?php endif; ?>
+                    <a class="nx-sv-btn nx-sv-btn--board" href="/paint/projects.php" target="_blank" rel="noopener" title="Otwórz tablicę">🖊</a>
                 </div>
             </div>
             <?php endforeach; ?>
