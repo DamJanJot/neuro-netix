@@ -57,26 +57,27 @@ foreach ($navItems as $item) {
 <body>
 <div class="nx-shell" id="nxShell">
     <aside class="nx-sidebar" id="nxSidebar">
-        <div class="nx-switch nx-switch-side" id="nxSwitch">
-            <button class="nx-switch-btn" id="nxSwitchBtn" type="button" aria-expanded="false">
-                <img class="nx-switch-logo" src="assets/img/neuronetix-logo.png" alt="">
-                <span class="nx-switch-text">
-                    <strong>Neuronetix</strong>
-                </span>
-                <span class="nx-switch-arrow">▾</span>
-            </button>
-            <div class="nx-switch-menu" id="nxSwitchMenu">
-                <?php foreach ($appSwitchItems as $app): ?>
-                    <?php $target = (string) ($app['url'] ?? '#'); ?>
-                    <a class="nx-switch-item" href="<?php echo neuronetix_sanitize($target); ?>" <?php echo strpos($target, 'http') === 0 ? 'target="_blank" rel="noopener"' : ''; ?>>
-                        <span><?php echo neuronetix_sanitize((string) ($app['icon'] ?? '•')); ?></span>
-                        <span><?php echo neuronetix_sanitize((string) ($app['label'] ?? 'Aplikacja')); ?></span>
-                    </a>
-                <?php endforeach; ?>
+        <div class="nx-sidebar-header">
+            <button class="nx-mobile-close" id="nxCloseSidebar" aria-label="Zamknij menu"><span aria-hidden="true">&#8592;</span></button>
+            <div class="nx-switch nx-switch-side" id="nxSwitch">
+                <button class="nx-switch-btn" id="nxSwitchBtn" type="button" aria-expanded="false">
+                    <img class="nx-switch-logo" src="assets/img/neuronetix-logo.png" alt="">
+                    <span class="nx-switch-text">
+                        <strong>Neuronetix</strong>
+                    </span>
+                    <span class="nx-switch-arrow">▾</span>
+                </button>
+                <div class="nx-switch-menu" id="nxSwitchMenu">
+                    <?php foreach ($appSwitchItems as $app): ?>
+                        <?php $target = (string) ($app['url'] ?? '#'); ?>
+                        <a class="nx-switch-item" href="<?php echo neuronetix_sanitize($target); ?>" <?php echo strpos($target, 'http') === 0 ? 'target="_blank" rel="noopener"' : ''; ?>>
+                            <span><?php echo neuronetix_sanitize((string) ($app['icon'] ?? '•')); ?></span>
+                            <span><?php echo neuronetix_sanitize((string) ($app['label'] ?? 'Aplikacja')); ?></span>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
             </div>
         </div>
-
-        <button class="nx-mobile-close" id="nxCloseSidebar" aria-label="Zamknij menu">×</button>
 
         <nav class="nx-nav">
             <?php foreach ($groupedNav as $groupKey => $items): ?>
@@ -137,7 +138,7 @@ foreach ($navItems as $item) {
 
     <main class="nx-main">
         <header class="nx-topbar">
-            <button class="nx-mobile-open" id="nxOpenSidebar" aria-label="Otworz menu">☰</button>
+            <button class="nx-mobile-open" id="nxOpenSidebar" aria-label="Otwórz menu"><span aria-hidden="true">&#8594;</span></button>
             <div class="nx-top-actions">
                 <div class="nx-switch nx-user-menu" id="nxUserMenu">
                     <button class="nx-switch-btn" id="nxUserMenuBtn" type="button" aria-expanded="false">
