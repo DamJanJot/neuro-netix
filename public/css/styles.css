@@ -1,3 +1,10 @@
+/* Sidebar header for close+logo row */
+.nx-sidebar-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
 :root {
     --bg: #081123;
     --line: rgba(148, 163, 184, 0.24);
@@ -38,12 +45,13 @@ a {
     padding: 14px;
     display: grid;
     grid-template-rows: auto auto 1fr auto;
-    gap: 10px;
+        gap: 8px;
     z-index: 12;
 }
 
 .nx-mobile-close {
-    border: 1px solid var(--line);
+       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+       gap: 8px;
     border-radius: 8px;
     background: var(--panel);
     color: var(--text);
@@ -54,8 +62,11 @@ a {
 }
 
 .nx-switch {
-    position: relative;
+        display: none;
 }
+    .nx-user-trigger-avatar {
+        display: grid;
+    }
 
 .nx-switch-side {
     width: 100%;
@@ -293,8 +304,8 @@ a {
 .nx-nav-expandable.open .nx-nav-sub {
     display: grid;
     gap: 2px;
+    width: min(80vw, 250px);
 }
-
 .nx-nav-sub-link {
     display: flex;
     align-items: center;
@@ -302,6 +313,8 @@ a {
     padding: 7px 10px;
     border: 1px solid transparent;
     border-radius: 8px;
+        padding-right: 6px;
+        padding-left: 2px;
     text-decoration: none;
     font-size: 13px;
     color: var(--muted);
